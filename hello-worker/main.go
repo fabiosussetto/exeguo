@@ -14,28 +14,22 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var terminationFlag uint64
-
 type Worker struct {
-	ID         int
-	wg         *sync.WaitGroup
-	jobChan    <-chan *Job
-	cancelChan <-chan struct{}
-	logger     *log.Entry
+	ID     int
+	pool   *WorkerPool
+	logger *log.Entry
 }
 
 type Job struct {
-	ID         int
-	secsToWait int
-	worker     *Worker
-	cmd        *cmd.Cmd
-	cmdStatus  cmd.Status
+	ID        int
+	worker    *Worker
+	cmd       *cmd.Cmd
+	cmdStatus cmd.Status
 }
 
 func NewJob(ID int, command *cmd.Cmd) *Job {
 	return &Job{
-		ID: ID,
-		// secsToWait: secsToWait,
+		ID:  ID,
 		cmd: command,
 		cmdStatus: cmd.Status{
 			Cmd:      "",
@@ -48,30 +42,30 @@ func NewJob(ID int, command *cmd.Cmd) *Job {
 	}
 }
 
-func NewWorker(ID int, wg *sync.WaitGroup, jobChan <-chan *Job, cancelChan <-chan struct{}) *Worker {
+func NewWorker(pool *WorkerPool, ID int) *Worker {
 	return &Worker{
-		ID,
-		wg,
-		jobChan,
-		cancelChan,
-		log.WithFields(log.Fields{"worker_id": ID}),
+		pool:   pool,
+		ID:     ID,
+		logger: log.WithFields(log.Fields{"worker_id": ID}),
 	}
 }
 
 func (w *Worker) Start() {
 	go func() {
-		defer w.wg.Done()
+		defer w.pool.workersWg.Done()
+
+		w.logger.Infof("Ready to process jobs")
 
 		for {
 			select {
-			case <-w.cancelChan:
+			case <-w.pool.cancelChan:
 				return
 
-			case job := <-w.jobChan:
+			case job := <-w.pool.jobChan:
 				// if cancelChan and jobChan have messages ready at the same time, go scheduler
 				// randomly selected one of the select cases. So it can happen that the job is still
 				// scheduled (and if very unlucky, it can happen more than once in a row too)
-				if atomic.LoadUint64(&terminationFlag) == 1 {
+				if atomic.LoadUint64(&w.pool.terminationFlag) == 1 {
 					return
 				}
 
@@ -85,8 +79,6 @@ func (w *Worker) process(job *Job) {
 	job.worker = w
 
 	w.logger.Infof("Processing job #%d", job.ID)
-
-	// jobCmd := cmd.NewCmd("../test_cmd", strconv.Itoa(job.secsToWait), "5")
 
 	statusChan := job.cmd.Start() // non-blocking
 
@@ -103,7 +95,8 @@ func (w *Worker) process(job *Job) {
 	}()
 
 	go func() {
-		<-w.cancelChan
+		<-w.pool.cancelChan
+		// TODO: no need to do this if we get this notification while worker is idle
 		w.logger.Infof("Stopping job #%d ...", job.ID)
 		job.cmd.Stop()
 		ticker.Stop()
@@ -112,11 +105,65 @@ func (w *Worker) process(job *Job) {
 	// Block waiting for command to exit, be stopped, or be killed
 	finalStatus := <-statusChan
 
+	ticker.Stop()
+
 	if !finalStatus.Complete {
 		w.logger.Warnf("Forced termination of job #%d", job.ID)
 	} else {
 		w.logger.Infof("Finished job #%d", job.ID)
 	}
+}
+
+type WorkerPool struct {
+	NumWorkers int
+
+	terminationFlag  uint64
+	statusChan       chan struct{}
+	gracefulStopChan chan os.Signal
+	jobChan          chan *Job
+	cancelChan       chan struct{}
+	workersWg        sync.WaitGroup
+	shutdownWg       sync.WaitGroup
+}
+
+func NewWorkerPool(numWorkers int) *WorkerPool {
+	return &WorkerPool{
+		NumWorkers: numWorkers,
+
+		gracefulStopChan: make(chan os.Signal),
+	}
+}
+
+func (pool *WorkerPool) Start() <-chan struct{} {
+	pool.statusChan = make(chan struct{}, 1)
+	pool.jobChan = make(chan *Job, 100)
+	pool.cancelChan = make(chan struct{})
+
+	pool.shutdownWg.Add(1)
+
+	log.Infof("Starting %d workers", pool.NumWorkers)
+
+	for i := 0; i < pool.NumWorkers; i++ {
+		pool.workersWg.Add(1)
+		w := NewWorker(pool, i)
+		w.Start()
+	}
+
+	return pool.statusChan
+}
+
+func (pool *WorkerPool) Stop() {
+	atomic.StoreUint64(&pool.terminationFlag, 1)
+	close(pool.cancelChan)
+
+	log.Info("Wait 5s to finish processing")
+
+	time.Sleep(5 * time.Second)
+
+	pool.shutdownWg.Done()
+
+	// signal user we're shutting down
+	close(pool.statusChan)
 }
 
 func main() {
@@ -125,47 +172,41 @@ func main() {
 		FullTimestamp: true,
 	})
 
-	var gracefulStop = make(chan os.Signal)
-	signal.Notify(gracefulStop, syscall.SIGTERM)
-	signal.Notify(gracefulStop, syscall.SIGINT)
+	pool := NewWorkerPool(4)
 
-	jobChan := make(chan *Job, 100)
-	cancelChan := make(chan struct{})
-
-	var wg sync.WaitGroup
-	var shutdownWg sync.WaitGroup
-
-	shutdownWg.Add(1)
+	signal.Notify(pool.gracefulStopChan, syscall.SIGTERM)
+	signal.Notify(pool.gracefulStopChan, syscall.SIGINT)
 
 	go func() {
-		sig := <-gracefulStop
+		sig := <-pool.gracefulStopChan
 
-		log.Infof("Caught signal %+v", sig)
+		log.Infof("Caught signal %+v, stopping pool", sig)
 
-		atomic.StoreUint64(&terminationFlag, 1)
-		close(cancelChan)
-
-		log.Info("Wait for 3 second to finish processing")
-
-		time.Sleep(5 * time.Second)
-
-		log.Info("Exiting")
-		shutdownWg.Done()
+		pool.Stop()
 	}()
 
-	numWorkers := 4
+	poolChan := pool.Start()
 
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		w := NewWorker(i, &wg, jobChan, cancelChan)
-		w.Start()
+	numProducers := 2
+	var producerWg sync.WaitGroup
+
+	for i := 0; i < numProducers; i++ {
+		producerWg.Add(1)
+
+		// simulate async producer
+		go func(k int) {
+			defer producerWg.Done()
+
+			for i := 0; i < 1; i++ {
+				cmd := cmd.NewCmd("../test_cmd", strconv.Itoa(rand.Intn(10)), strconv.Itoa(rand.Intn(5)))
+				pool.jobChan <- NewJob((100*k)+i, cmd)
+
+				time.Sleep(time.Duration(rand.Int31n(10000)) * time.Millisecond)
+			}
+		}(i)
 	}
 
-	for i := 0; i < 50; i++ {
-		cmd := cmd.NewCmd("../test_cmd", strconv.Itoa(rand.Intn(10)), strconv.Itoa(rand.Intn(5)))
-		jobChan <- NewJob(i, cmd)
-	}
+	producerWg.Wait()
 
-	wg.Wait()
-	shutdownWg.Wait()
+	<-poolChan
 }
