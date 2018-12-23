@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-cmd/cmd"
+	log "github.com/sirupsen/logrus"
 )
 
 var terminationFlag uint64
@@ -21,19 +21,22 @@ type Worker struct {
 	wg         *sync.WaitGroup
 	jobChan    <-chan *Job
 	cancelChan <-chan struct{}
+	logger     *log.Entry
 }
 
 type Job struct {
 	ID         int
 	secsToWait int
 	worker     *Worker
+	cmd        *cmd.Cmd
 	cmdStatus  cmd.Status
 }
 
-func NewJob(ID int, secsToWait int) *Job {
+func NewJob(ID int, command *cmd.Cmd) *Job {
 	return &Job{
-		ID:         ID,
-		secsToWait: secsToWait,
+		ID: ID,
+		// secsToWait: secsToWait,
+		cmd: command,
 		cmdStatus: cmd.Status{
 			Cmd:      "",
 			PID:      0,
@@ -46,7 +49,13 @@ func NewJob(ID int, secsToWait int) *Job {
 }
 
 func NewWorker(ID int, wg *sync.WaitGroup, jobChan <-chan *Job, cancelChan <-chan struct{}) *Worker {
-	return &Worker{ID, wg, jobChan, cancelChan}
+	return &Worker{
+		ID,
+		wg,
+		jobChan,
+		cancelChan,
+		log.WithFields(log.Fields{"worker_id": ID}),
+	}
 }
 
 func (w *Worker) Start() {
@@ -75,30 +84,28 @@ func (w *Worker) Start() {
 func (w *Worker) process(job *Job) {
 	job.worker = w
 
-	msg := fmt.Sprintf("[Worker %d] Processing job #%d for %d seconds...", w.ID, job.ID, job.secsToWait)
-	fmt.Println(msg)
+	w.logger.Infof("Processing job #%d", job.ID)
 
-	jobCmd := cmd.NewCmd("../test_cmd", strconv.Itoa(job.secsToWait), "5")
+	// jobCmd := cmd.NewCmd("../test_cmd", strconv.Itoa(job.secsToWait), "5")
 
-	statusChan := jobCmd.Start() // non-blocking
+	statusChan := job.cmd.Start() // non-blocking
 
 	ticker := time.NewTicker(1 * time.Second)
 
-	// Print last line of stdout every 1s
 	go func() {
 		for range ticker.C {
-			status := jobCmd.Status()
+			status := job.cmd.Status()
 			job.cmdStatus = status
 			// n := len(status.Stdout)
 			// fmt.Println(status.Stdout[n-1])
-			fmt.Printf("[Worker %d] Job #%d output: %s\n", w.ID, job.ID, status.Stdout)
+			w.logger.Infof("Job #%d output: %s", job.ID, status.Stdout)
 		}
 	}()
 
 	go func() {
 		<-w.cancelChan
-		fmt.Printf("[Worker %d] Stopping job #%d ...\n", w.ID, job.ID)
-		jobCmd.Stop()
+		w.logger.Infof("Stopping job #%d ...", job.ID)
+		job.cmd.Stop()
 		ticker.Stop()
 	}()
 
@@ -106,14 +113,17 @@ func (w *Worker) process(job *Job) {
 	finalStatus := <-statusChan
 
 	if !finalStatus.Complete {
-		fmt.Printf("[Worker %d] Forced termination of job #%d\n", w.ID, job.ID)
+		w.logger.Warnf("Forced termination of job #%d", job.ID)
 	} else {
-		fmt.Printf("[Worker %d] Finished job #%d\n", w.ID, job.ID)
+		w.logger.Infof("Finished job #%d", job.ID)
 	}
 }
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
 
 	var gracefulStop = make(chan os.Signal)
 	signal.Notify(gracefulStop, syscall.SIGTERM)
@@ -129,18 +139,18 @@ func main() {
 
 	go func() {
 		sig := <-gracefulStop
-		fmt.Printf("caught sig: %+v \n", sig)
+
+		log.Infof("Caught signal %+v", sig)
 
 		atomic.StoreUint64(&terminationFlag, 1)
 		close(cancelChan)
 
-		fmt.Println("Wait for 3 second to finish processing")
+		log.Info("Wait for 3 second to finish processing")
 
 		time.Sleep(5 * time.Second)
 
-		fmt.Println("Exiting")
+		log.Info("Exiting")
 		shutdownWg.Done()
-		// os.Exit(0)
 	}()
 
 	numWorkers := 4
@@ -152,7 +162,8 @@ func main() {
 	}
 
 	for i := 0; i < 50; i++ {
-		jobChan <- NewJob(i, rand.Intn(10))
+		cmd := cmd.NewCmd("../test_cmd", strconv.Itoa(rand.Intn(10)), strconv.Itoa(rand.Intn(5)))
+		jobChan <- NewJob(i, cmd)
 	}
 
 	wg.Wait()

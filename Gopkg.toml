@@ -32,3 +32,7 @@
 [[constraint]]
   name = "github.com/go-cmd/cmd"
   version = "1.0.4"
+
+[[constraint]]
+  name = "github.com/sirupsen/logrus"
+  version = "1.2.0"
