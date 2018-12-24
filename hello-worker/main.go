@@ -18,7 +18,7 @@ func testProducers(pool *WorkerPool) chan struct{} {
 
 	for i := 0; i < numProducers; i++ {
 		// simulate async producer
-		go func(k int) {
+		go func() {
 			for i := 0; ; i++ {
 				select {
 				case <-exitCh:
@@ -27,10 +27,10 @@ func testProducers(pool *WorkerPool) chan struct{} {
 					time.Sleep(time.Duration(rand.Int31n(10000)) * time.Millisecond)
 
 					cmd := cmd.NewCmd("../test_cmd", strconv.Itoa(rand.Intn(10)), strconv.Itoa(rand.Intn(5)))
-					pool.jobChan <- NewJob((100*k)+i, cmd)
+					pool.jobChan <- NewJob(cmd)
 				}
 			}
-		}(i)
+		}()
 	}
 
 	return exitCh
@@ -44,24 +44,33 @@ func main() {
 
 	pool := NewWorkerPool(4)
 
-	shutdownChan := make(chan os.Signal, 1)
+	shutdownChan := make(chan os.Signal)
 
 	signal.Notify(shutdownChan, syscall.SIGTERM)
 	signal.Notify(shutdownChan, syscall.SIGINT)
 
-	poolChan := pool.Start()
+	poolStatusChan, poolStatusForcedChan := pool.Start()
 	producerExitChan := testProducers(pool)
 
-	go func() {
-		sig := <-shutdownChan
+	select {
+	case sig := <-shutdownChan:
+		log.Infof("Caught signal %+v, gracefully stopping worker pool", sig)
 
-		log.Infof("Caught signal %+v, stopping pool and producers", sig)
+		go func() {
+			pool.Stop()
+		}()
+
 		close(producerExitChan)
 
-		pool.Stop()
+		forceSig := <-shutdownChan
+		log.Warnf("Caught signal %+v, forcing pool shutdown", forceSig)
+		pool.ForceStop()
 
-	}()
-
-	<-producerExitChan
-	<-poolChan
+	case <-poolStatusChan:
+		log.Infof("Pool has been gracefully terminated")
+		os.Exit(0)
+	case <-poolStatusForcedChan:
+		log.Warnf("Pool has been forcefully terminated")
+		os.Exit(0)
+	}
 }

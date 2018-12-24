@@ -30,6 +30,7 @@ func (w *Worker) Start() {
 		for {
 			select {
 			case <-w.pool.cancelChan:
+				w.logger.Infof("Received shutdown signal, won't process any new jobs")
 				return
 
 			case job := <-w.pool.jobChan:
@@ -40,6 +41,9 @@ func (w *Worker) Start() {
 					return
 				}
 
+				w.logger.Infof("Processing job #%d", job.ID)
+
+				job.worker = w
 				w.process(job)
 			}
 		}
@@ -47,10 +51,6 @@ func (w *Worker) Start() {
 }
 
 func (w *Worker) process(job *Job) {
-	job.worker = w
-
-	w.logger.Infof("Processing job #%d", job.ID)
-
 	statusChan := job.cmd.Start() // non-blocking
 
 	ticker := time.NewTicker(1 * time.Second)
@@ -65,22 +65,18 @@ func (w *Worker) process(job *Job) {
 		}
 	}()
 
-	go func() {
-		<-w.pool.cancelChan
-		// TODO: no need to do this if we get this notification while worker is idle
-		w.logger.Infof("Stopping job #%d ...", job.ID)
+	select {
+	case <-w.pool.forceCancelChan:
+		w.logger.Warnf("Forcefully stopping job #%d ...", job.ID)
 		job.cmd.Stop()
 		ticker.Stop()
-	}()
+	case finalStatus := <-statusChan:
+		ticker.Stop()
 
-	// Block waiting for command to exit, be stopped, or be killed
-	finalStatus := <-statusChan
-
-	ticker.Stop()
-
-	if !finalStatus.Complete {
-		w.logger.Warnf("Forced termination of job #%d", job.ID)
-	} else {
+		if !finalStatus.Complete {
+			w.logger.Warnf("Forced termination of job #%d", job.ID)
+			return
+		}
 		w.logger.Infof("Finished job #%d", job.ID)
 	}
 }
