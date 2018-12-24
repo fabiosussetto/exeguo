@@ -62,15 +62,18 @@ func main() {
 
 		close(producerExitChan)
 
-		forceSig := <-shutdownChan
-		log.Warnf("Caught signal %+v, forcing pool shutdown", forceSig)
-		pool.ForceStop()
+		select {
+		case forceSig := <-shutdownChan:
+			log.Warnf("Caught signal %+v, forcing pool shutdown", forceSig)
+			pool.ForceStop()
 
-	case <-poolStatusChan:
-		log.Infof("Pool has been gracefully terminated")
-		os.Exit(0)
-	case <-poolStatusForcedChan:
-		log.Warnf("Pool has been forcefully terminated")
-		os.Exit(0)
+		case <-poolStatusChan:
+			log.Infof("Pool has been gracefully terminated")
+			os.Exit(0)
+
+		case <-poolStatusForcedChan:
+			log.Warnf("Pool has been forcefully terminated")
+			os.Exit(0)
+		}
 	}
 }
