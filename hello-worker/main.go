@@ -2,15 +2,39 @@ package main
 
 import (
 	"math/rand"
+	"os"
 	"os/signal"
 	"strconv"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/go-cmd/cmd"
 	log "github.com/sirupsen/logrus"
 )
+
+func testProducers(pool *WorkerPool) chan struct{} {
+	numProducers := 2
+	exitCh := make(chan struct{})
+
+	for i := 0; i < numProducers; i++ {
+		// simulate async producer
+		go func(k int) {
+			for i := 0; ; i++ {
+				select {
+				case <-exitCh:
+					return
+				default:
+					time.Sleep(time.Duration(rand.Int31n(10000)) * time.Millisecond)
+
+					cmd := cmd.NewCmd("../test_cmd", strconv.Itoa(rand.Intn(10)), strconv.Itoa(rand.Intn(5)))
+					pool.jobChan <- NewJob((100*k)+i, cmd)
+				}
+			}
+		}(i)
+	}
+
+	return exitCh
+}
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
@@ -20,39 +44,24 @@ func main() {
 
 	pool := NewWorkerPool(4)
 
-	signal.Notify(pool.gracefulStopChan, syscall.SIGTERM)
-	signal.Notify(pool.gracefulStopChan, syscall.SIGINT)
+	shutdownChan := make(chan os.Signal, 1)
 
-	numProducers := 2
-	var producerWg sync.WaitGroup
-
-	go func() {
-		sig := <-pool.gracefulStopChan
-
-		log.Infof("Caught signal %+v, stopping pool", sig)
-
-		pool.Stop()
-	}()
+	signal.Notify(shutdownChan, syscall.SIGTERM)
+	signal.Notify(shutdownChan, syscall.SIGINT)
 
 	poolChan := pool.Start()
+	producerExitChan := testProducers(pool)
 
-	for i := 0; i < numProducers; i++ {
-		producerWg.Add(1)
+	go func() {
+		sig := <-shutdownChan
 
-		// simulate async producer
-		go func(k int) {
-			defer producerWg.Done()
+		log.Infof("Caught signal %+v, stopping pool and producers", sig)
+		close(producerExitChan)
 
-			for i := 0; i < 1; i++ {
-				time.Sleep(time.Duration(rand.Int31n(10000)) * time.Millisecond)
+		pool.Stop()
 
-				cmd := cmd.NewCmd("../test_cmd", strconv.Itoa(rand.Intn(10)), strconv.Itoa(rand.Intn(5)))
-				pool.jobChan <- NewJob((100*k)+i, cmd)
-			}
-		}(i)
-	}
+	}()
 
-	producerWg.Wait()
-
+	<-producerExitChan
 	<-poolChan
 }
