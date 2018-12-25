@@ -72,6 +72,7 @@ func (w *Worker) process(job *Job) {
 		ticker.Stop()
 	case finalStatus := <-statusChan:
 		ticker.Stop()
+		w.logger.Infof("Job #%d completed. Output: %s", job.ID, finalStatus.Stdout)
 
 		if !finalStatus.Complete {
 			w.logger.Warnf("Forced termination of job #%d", job.ID)
