@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/rpc"
 	"os"
 	"time"
 
@@ -13,15 +12,6 @@ import (
 
 	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
 )
-
-func connectToWorker(host string) *rpc.Client {
-	client, err := rpc.DialHTTP("tcp", host)
-	if err != nil {
-		log.Fatal("Connection error: ", err)
-	}
-
-	return client
-}
 
 func sendCommand(client pb.JobServiceClient, jobCmd *pb.JobCommand) *pb.JobCommandResult {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -55,7 +45,6 @@ func queryJobStatus(client pb.JobServiceClient, jobID uint64) {
 
 func Execute() {
 	var host string
-	// var rawArgs string
 
 	jobCmd := pb.JobCommand{}
 
@@ -64,12 +53,6 @@ func Execute() {
 		Short: "Hello executes bash commands",
 		Long:  `Work in progress`,
 		Run: func(cmd *cobra.Command, args []string) {
-			// client := connectToWorker(host)
-
-			// jobCmd.Args = regexp.MustCompile("\\s+").Split(rawArgs, -1)
-			// sendCommandToExec(client, &jobCmd)
-
-			// jobCmd.Args = regexp.MustCompile("\\s+").Split(rawArgs, -1)
 
 			conn, err := grpc.Dial(host, grpc.WithInsecure())
 			if err != nil {
