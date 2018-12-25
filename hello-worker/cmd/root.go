@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strings"
 
 	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
 	hw "github.com/fabiosussetto/hello/hello-worker/lib"
@@ -39,9 +40,20 @@ type jobServiceServer struct {
 func (s *jobServiceServer) ScheduleCommand(ctx context.Context, jobCmd *pb.JobCommand) (*pb.JobCommandResult, error) {
 	myJobCmd := hw.JobCmd{Name: jobCmd.Name, Args: regexp.MustCompile("\\s+").Split(jobCmd.Args, -1)}
 
-	s.WorkerPool.RunCmd(myJobCmd)
+	job := s.WorkerPool.RunCmd(myJobCmd)
 
-	return &pb.JobCommandResult{}, nil
+	return &pb.JobCommandResult{JobId: job.ID}, nil
+}
+
+func (s *jobServiceServer) QueryJobStatus(ctx context.Context, req *pb.JobStatusRequest) (*pb.JobStatus, error) {
+	job := s.WorkerPool.GetJobByID(req.JobId)
+
+	jobStatus := &pb.JobStatus{
+		CommandName: job.CmdStatus.Cmd,
+		StdOut:      strings.Join(job.CmdStatus.Stdout, "\n"),
+	}
+
+	return jobStatus, nil
 }
 
 func startServer(workerPool *hw.WorkerPool) {

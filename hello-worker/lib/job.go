@@ -1,27 +1,27 @@
 package lib
 
 import (
-	"sync/atomic"
-
 	"github.com/go-cmd/cmd"
 )
 
-var jobCounter uint64
+// var jobCounter uint64
 
 type Job struct {
 	ID        uint64
-	worker    *Worker
-	cmd       *cmd.Cmd
-	cmdStatus cmd.Status
+	CmdStatus cmd.Status
+
+	worker *Worker
+	cmd    *cmd.Cmd
 }
 
-func NewJob(command *cmd.Cmd) *Job {
-	atomic.AddUint64(&jobCounter, 1)
+func NewJob(ID uint64, command *cmd.Cmd) *Job {
+	// atomic.AddUint64(&jobCounter, 1)
 
 	return &Job{
-		ID:  atomic.LoadUint64(&jobCounter),
+		// ID:  atomic.LoadUint64(&jobCounter),
+		ID:  ID,
 		cmd: command,
-		cmdStatus: cmd.Status{
+		CmdStatus: cmd.Status{
 			Cmd:      "",
 			PID:      0,
 			Complete: false,

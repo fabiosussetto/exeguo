@@ -23,7 +23,7 @@ func connectToWorker(host string) *rpc.Client {
 	return client
 }
 
-func sendCommand(client pb.JobServiceClient, jobCmd *pb.JobCommand) {
+func sendCommand(client pb.JobServiceClient, jobCmd *pb.JobCommand) *pb.JobCommandResult {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -35,6 +35,22 @@ func sendCommand(client pb.JobServiceClient, jobCmd *pb.JobCommand) {
 		log.Fatalf("%v.ScheduleCommand(_) = _, %v: ", client, err)
 	}
 	log.Println(jobResult)
+
+	return jobResult
+}
+
+func queryJobStatus(client pb.JobServiceClient, jobID uint64) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	log.Println("Calling QueryJobStatus")
+
+	jobStatus, err := client.QueryJobStatus(ctx, &pb.JobStatusRequest{JobId: jobID})
+
+	if err != nil {
+		log.Fatalf("%v.QueryJobStatus(_) = _, %v: ", client, err)
+	}
+	log.Println(jobStatus)
 }
 
 func Execute() {
@@ -62,7 +78,14 @@ func Execute() {
 			defer conn.Close()
 			client := pb.NewJobServiceClient(conn)
 
-			sendCommand(client, &jobCmd)
+			for i := 0; i < 10; i++ {
+				jobResult := sendCommand(client, &jobCmd)
+
+				time.Sleep(2 * time.Second)
+
+				queryJobStatus(client, jobResult.JobId)
+			}
+
 		},
 	}
 

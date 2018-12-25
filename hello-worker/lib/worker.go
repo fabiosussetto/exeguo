@@ -58,7 +58,7 @@ func (w *Worker) process(job *Job) {
 	go func() {
 		for range ticker.C {
 			status := job.cmd.Status()
-			job.cmdStatus = status
+			job.CmdStatus = status
 			// n := len(status.Stdout)
 			// fmt.Println(status.Stdout[n-1])
 			w.logger.Infof("Job #%d output: %s", job.ID, status.Stdout)
@@ -72,12 +72,14 @@ func (w *Worker) process(job *Job) {
 		ticker.Stop()
 	case finalStatus := <-statusChan:
 		ticker.Stop()
-		w.logger.Infof("Job #%d completed. Output: %s", job.ID, finalStatus.Stdout)
+		job.CmdStatus = finalStatus
 
 		if !finalStatus.Complete {
 			w.logger.Warnf("Forced termination of job #%d", job.ID)
 			return
 		}
-		w.logger.Infof("Finished job #%d", job.ID)
+
+		w.logger.Infof("Job #%d completed. Output: %s", job.ID, finalStatus.Stdout)
+		// w.logger.Infof("Finished job #%d", job.ID)
 	}
 }
