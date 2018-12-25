@@ -14,18 +14,6 @@ import (
 	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
 )
 
-type jobServiceServer struct {
-	// savedFeatures []*pb.Feature // read-only after initialized
-
-	// mu         sync.Mutex // protects routeNotes
-	// routeNotes map[string][]*pb.RouteNote
-
-}
-
-// func (s *jobServiceServer) ScheduleCommand(context.Context, *pb.JobCommand) (*pb.JobCommandResult, error) {
-
-// }
-
 func connectToWorker(host string) *rpc.Client {
 	client, err := rpc.DialHTTP("tcp", host)
 	if err != nil {
@@ -35,13 +23,11 @@ func connectToWorker(host string) *rpc.Client {
 	return client
 }
 
-func sendCommand(client pb.JobServiceClient) {
+func sendCommand(client pb.JobServiceClient, jobCmd *pb.JobCommand) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	log.Println("Calling ScheduleCommand")
-
-	jobCmd := &pb.JobCommand{Name: "ls", Args: "-la /"}
 
 	jobResult, err := client.ScheduleCommand(ctx, jobCmd)
 
@@ -51,16 +37,11 @@ func sendCommand(client pb.JobServiceClient) {
 	log.Println(jobResult)
 }
 
-// func sendCommandToExec(client *rpc.Client, jobCmd *hw.JobCmd) {
-// 	var reply workerRpc.ScheduleResult
-// 	client.Call("JobsRPC.ScheduleCommand", jobCmd, &reply)
-// }
-
 func Execute() {
 	var host string
 	// var rawArgs string
 
-	// jobCmd := hw.JobCmd{}
+	jobCmd := pb.JobCommand{}
 
 	var rootCmd = &cobra.Command{
 		Use:   "hello",
@@ -72,6 +53,8 @@ func Execute() {
 			// jobCmd.Args = regexp.MustCompile("\\s+").Split(rawArgs, -1)
 			// sendCommandToExec(client, &jobCmd)
 
+			// jobCmd.Args = regexp.MustCompile("\\s+").Split(rawArgs, -1)
+
 			conn, err := grpc.Dial(host, grpc.WithInsecure())
 			if err != nil {
 				log.Fatalf("fail to dial: %v", err)
@@ -79,13 +62,13 @@ func Execute() {
 			defer conn.Close()
 			client := pb.NewJobServiceClient(conn)
 
-			sendCommand(client)
+			sendCommand(client, &jobCmd)
 		},
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&host, "worker-host", "H", "localhost:1234", "Worker host")
-	// rootCmd.PersistentFlags().StringVarP(&jobCmd.Name, "command", "c", "", "Command to execute")
-	// rootCmd.PersistentFlags().StringVarP(&rawArgs, "args", "a", "", "Command arguments")
+	rootCmd.PersistentFlags().StringVarP(&jobCmd.Name, "command", "c", "", "Command to execute")
+	rootCmd.PersistentFlags().StringVarP(&jobCmd.Args, "args", "a", "", "Command arguments")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

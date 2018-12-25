@@ -60,29 +60,6 @@ func startServer(workerPool *hw.WorkerPool) {
 	grpcServer.Serve(lis)
 }
 
-// func startServer(workerPool *hw.WorkerPool) {
-// 	jobsRPC := workerRpc.JobsRPC{WorkerPool: workerPool}
-
-// 	// Publish the receivers methods
-// 	err := rpc.Register(&jobsRPC)
-// 	if err != nil {
-// 		log.Fatal("Format of service jobsRpc isn't correct. ", err)
-// 	}
-// 	// Register a HTTP handler
-// 	rpc.HandleHTTP()
-// 	// Listen to TPC connections on port 1234
-// 	listener, e := net.Listen("tcp", ":1234")
-// 	if e != nil {
-// 		log.Fatal("Listen error: ", e)
-// 	}
-// 	log.Printf("Serving RPC server on port %d", 1234)
-// 	// Start accept incoming HTTP connections
-// 	err = http.Serve(listener, nil)
-// 	if err != nil {
-// 		log.Fatal("Error serving: ", err)
-// 	}
-// }
-
 func start() {
 	log.SetFormatter(&log.TextFormatter{
 		FullTimestamp: true,
