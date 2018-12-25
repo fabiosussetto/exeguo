@@ -2,16 +2,21 @@ package cmd
 
 import (
 	"fmt"
+	"net"
+	"net/http"
+	"net/rpc"
 	"os"
 	"os/signal"
-	"syscall"
 
 	hw "github.com/fabiosussetto/hello/hello-worker/lib"
+	workerRpc "github.com/fabiosussetto/hello/hello-worker/rpc"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 var numWorkers int
+
+var workerPool *hw.WorkerPool
 
 var rootCmd = &cobra.Command{
 	Use:   "hello",
@@ -26,40 +31,67 @@ func init() {
 	rootCmd.PersistentFlags().IntVarP(&numWorkers, "workers", "w", 4, "number of workers (defaults to 4)")
 }
 
+func startServer(workerPool *hw.WorkerPool) {
+	jobsRPC := workerRpc.JobsRPC{WorkerPool: workerPool}
+
+	// Publish the receivers methods
+	err := rpc.Register(&jobsRPC)
+	if err != nil {
+		log.Fatal("Format of service jobsRpc isn't correct. ", err)
+	}
+	// Register a HTTP handler
+	rpc.HandleHTTP()
+	// Listen to TPC connections on port 1234
+	listener, e := net.Listen("tcp", ":1234")
+	if e != nil {
+		log.Fatal("Listen error: ", e)
+	}
+	log.Printf("Serving RPC server on port %d", 1234)
+	// Start accept incoming HTTP connections
+	err = http.Serve(listener, nil)
+	if err != nil {
+		log.Fatal("Error serving: ", err)
+	}
+}
+
 func start() {
 	log.SetFormatter(&log.TextFormatter{
 		FullTimestamp: true,
 	})
 
-	pool := hw.NewWorkerPool(numWorkers)
+	workerPool = hw.NewWorkerPool(numWorkers)
+
+	go func() {
+		startServer(workerPool)
+	}()
 
 	shutdownChan := make(chan os.Signal)
 
-	signal.Notify(shutdownChan, syscall.SIGTERM)
-	signal.Notify(shutdownChan, syscall.SIGINT)
+	// signal.Notify(shutdownChan, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(shutdownChan, os.Interrupt)
 
-	poolStatusChan, poolStatusForcedChan := pool.Start()
+	poolStatusChan, poolStatusForcedChan := workerPool.Start()
 
 	select {
 	case sig := <-shutdownChan:
 		log.Infof("Caught signal %+v, gracefully stopping worker pool", sig)
 
 		go func() {
-			pool.Stop()
+			workerPool.Stop()
 		}()
 
 		select {
 		case forceSig := <-shutdownChan:
 			log.Warnf("Caught signal %+v, forcing pool shutdown", forceSig)
-			pool.ForceStop()
+			workerPool.ForceStop()
 
 		case <-poolStatusChan:
 			log.Infof("Pool has been gracefully terminated")
-			os.Exit(0)
+			return
 
 		case <-poolStatusForcedChan:
 			log.Warnf("Pool has been forcefully terminated")
-			os.Exit(0)
+			return
 		}
 	}
 }

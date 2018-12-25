@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/fabiosussetto/hello/hello-worker/cmd"
+	"github.com/fabiosussetto/hello/hello-sender/cmd"
 )
 
 func main() {

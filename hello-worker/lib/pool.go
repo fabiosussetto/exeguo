@@ -4,6 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/go-cmd/cmd"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -22,10 +23,23 @@ type WorkerPool struct {
 	shutdownWg      sync.WaitGroup
 }
 
+type JobCmd struct {
+	Name string
+	Args []string
+	Env  []string
+	Dir  string
+}
+
 func NewWorkerPool(numWorkers int) *WorkerPool {
 	return &WorkerPool{
 		NumWorkers: numWorkers,
 	}
+}
+
+func (pool *WorkerPool) RunCmd(jobCmd JobCmd) {
+	cmd := cmd.NewCmd(jobCmd.Name, jobCmd.Args...)
+
+	pool.jobChan <- NewJob(cmd)
 }
 
 func (pool *WorkerPool) Start() (<-chan struct{}, <-chan struct{}) {
