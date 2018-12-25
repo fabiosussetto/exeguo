@@ -1,0 +1,16 @@
+cmd:
+  name: ls 
+  args: [-lah]
+  env:
+    foo: bar
+  cwd: ~
+targets:
+  - host: 192.168.10.1
+    complete: false
+    duration: 2500
+    started_at: 123123
+    finished_at: 123123
+    stdout: [...]
+    stderr: [...]
+    exit_code: 
+  - 192.168.10.2
