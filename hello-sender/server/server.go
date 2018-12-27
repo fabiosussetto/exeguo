@@ -35,10 +35,10 @@ func setupDB() *gorm.DB {
 	if err != nil {
 		panic("failed to connect database")
 	}
-	db.Exec("PRAGMA foreign_keys = ON;")
-	// db.LogMode(true)
 
-	// db.AutoMigrate(&Command{}, &CommandRun{})
+	db.Exec("PRAGMA foreign_keys = ON;")
+	db.LogMode(true)
+	db.AutoMigrate(&Command{}, &CommandRun{})
 
 	return db
 }
