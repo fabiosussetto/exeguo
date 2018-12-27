@@ -4,8 +4,6 @@ import (
 	"github.com/go-cmd/cmd"
 )
 
-// var jobCounter uint64
-
 type Job struct {
 	ID        uint64
 	CmdStatus cmd.Status
@@ -15,10 +13,7 @@ type Job struct {
 }
 
 func NewJob(ID uint64, command *cmd.Cmd) *Job {
-	// atomic.AddUint64(&jobCounter, 1)
-
 	return &Job{
-		// ID:  atomic.LoadUint64(&jobCounter),
 		ID:  ID,
 		cmd: command,
 		CmdStatus: cmd.Status{

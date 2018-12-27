@@ -1,16 +1,14 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"os"
 	"os/signal"
-	"regexp"
-	"strings"
 
 	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
 	hw "github.com/fabiosussetto/hello/hello-worker/lib"
+	hwServer "github.com/fabiosussetto/hello/hello-worker/server"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -33,28 +31,28 @@ func init() {
 	rootCmd.PersistentFlags().IntVarP(&numWorkers, "workers", "w", 4, "number of workers (defaults to 4)")
 }
 
-type jobServiceServer struct {
-	WorkerPool *hw.WorkerPool
-}
+// type jobServiceServer struct {
+// 	WorkerPool *hw.WorkerPool
+// }
 
-func (s *jobServiceServer) ScheduleCommand(ctx context.Context, jobCmd *pb.JobCommand) (*pb.JobCommandResult, error) {
-	myJobCmd := hw.JobCmd{Name: jobCmd.Name, Args: regexp.MustCompile("\\s+").Split(jobCmd.Args, -1)}
+// func (s *jobServiceServer) ScheduleCommand(ctx context.Context, jobCmd *pb.JobCommand) (*pb.JobCommandResult, error) {
+// 	myJobCmd := hw.JobCmd{Name: jobCmd.Name, Args: regexp.MustCompile("\\s+").Split(jobCmd.Args, -1)}
 
-	job := s.WorkerPool.RunCmd(myJobCmd)
+// 	job := s.WorkerPool.RunCmd(myJobCmd)
 
-	return &pb.JobCommandResult{JobId: job.ID}, nil
-}
+// 	return &pb.JobCommandResult{JobId: job.ID}, nil
+// }
 
-func (s *jobServiceServer) QueryJobStatus(ctx context.Context, req *pb.JobStatusRequest) (*pb.JobStatus, error) {
-	job := s.WorkerPool.GetJobByID(req.JobId)
+// func (s *jobServiceServer) QueryJobStatus(ctx context.Context, req *pb.JobStatusRequest) (*pb.JobStatus, error) {
+// 	job := s.WorkerPool.GetJobByID(req.JobId)
 
-	jobStatus := &pb.JobStatus{
-		CommandName: job.CmdStatus.Cmd,
-		StdOut:      strings.Join(job.CmdStatus.Stdout, "\n"),
-	}
+// 	jobStatus := &pb.JobStatus{
+// 		CommandName: job.CmdStatus.Cmd,
+// 		StdOut:      strings.Join(job.CmdStatus.Stdout, "\n"),
+// 	}
 
-	return jobStatus, nil
-}
+// 	return jobStatus, nil
+// }
 
 func connectToDispatcher() (*grpc.ClientConn, pb.DispatcherServiceClient) {
 	conn, err := grpc.Dial("localhost:1235", grpc.WithInsecure())
@@ -68,7 +66,6 @@ func connectToDispatcher() (*grpc.ClientConn, pb.DispatcherServiceClient) {
 }
 
 func startServer(workerPool *hw.WorkerPool) {
-	// lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	log.Infoln("Starting gRPC server")
 
 	lis, err := net.Listen("tcp", "localhost:1234")
@@ -78,7 +75,7 @@ func startServer(workerPool *hw.WorkerPool) {
 
 	grpcServer := grpc.NewServer()
 
-	pb.RegisterJobServiceServer(grpcServer, &jobServiceServer{WorkerPool: workerPool})
+	pb.RegisterJobServiceServer(grpcServer, &hwServer.JobServiceServer{WorkerPool: workerPool})
 
 	grpcServer.Serve(lis)
 }
