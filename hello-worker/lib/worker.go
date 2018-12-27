@@ -2,6 +2,7 @@ package lib
 
 import (
 	"context"
+	"io"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -68,7 +69,14 @@ func (w *Worker) Start() {
 func (w *Worker) streamStatusUpdate(status *cmd.Status) {
 	statusUpdate := &pb.JobStatusUpdate{StdinLine: strings.Join(status.Stdout, "\n")}
 
-	if err := w.gRPCStream.Send(statusUpdate); err != nil {
+	err := w.gRPCStream.Send(statusUpdate)
+
+	if err == io.EOF {
+		w.logger.Warn("Lost gRPC connection to Dispatcher")
+		return
+	}
+
+	if err != nil {
 		w.logger.Fatalf("%v.Send(%v) = %v", w.gRPCStream, statusUpdate, err)
 	}
 }

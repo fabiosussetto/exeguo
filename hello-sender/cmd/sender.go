@@ -1,42 +1,34 @@
 package cmd
 
-import (
-	"context"
-	"log"
-	"time"
+// func sendCommand(client pb.JobServiceClient, jobCmd *pb.JobCommand) *pb.JobCommandResult {
+// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// 	defer cancel()
 
-	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
-)
+// 	log.Println("Calling ScheduleCommand")
 
-func sendCommand(client pb.JobServiceClient, jobCmd *pb.JobCommand) *pb.JobCommandResult {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+// 	jobResult, err := client.ScheduleCommand(ctx, jobCmd)
 
-	log.Println("Calling ScheduleCommand")
+// 	if err != nil {
+// 		log.Fatalf("%v.ScheduleCommand(_) = _, %v: ", client, err)
+// 	}
+// 	log.Println(jobResult)
 
-	jobResult, err := client.ScheduleCommand(ctx, jobCmd)
+// 	return jobResult
+// }
 
-	if err != nil {
-		log.Fatalf("%v.ScheduleCommand(_) = _, %v: ", client, err)
-	}
-	log.Println(jobResult)
+// func queryJobStatus(client pb.JobServiceClient, jobID uint64) {
+// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// 	defer cancel()
 
-	return jobResult
-}
+// 	log.Println("Calling QueryJobStatus")
 
-func queryJobStatus(client pb.JobServiceClient, jobID uint64) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+// 	jobStatus, err := client.QueryJobStatus(ctx, &pb.JobStatusRequest{JobId: jobID})
 
-	log.Println("Calling QueryJobStatus")
-
-	jobStatus, err := client.QueryJobStatus(ctx, &pb.JobStatusRequest{JobId: jobID})
-
-	if err != nil {
-		log.Fatalf("%v.QueryJobStatus(_) = _, %v: ", client, err)
-	}
-	log.Println(jobStatus)
-}
+// 	if err != nil {
+// 		log.Fatalf("%v.QueryJobStatus(_) = _, %v: ", client, err)
+// 	}
+// 	log.Println(jobStatus)
+// }
 
 // func Execute() {
 // 	var host string

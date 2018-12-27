@@ -8,10 +8,6 @@ import (
 )
 
 func Execute() {
-	// var host string
-
-	// jobCmd := pb.JobCommand{}
-
 	var rootCmd = &cobra.Command{
 		Use:   "hello",
 		Short: "Hello executes bash commands",
@@ -19,7 +15,6 @@ func Execute() {
 	}
 
 	rootCmd.AddCommand(ServerCmd)
-	// cmdEcho.AddCommand(cmdTimes)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
