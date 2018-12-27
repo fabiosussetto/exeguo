@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -78,9 +79,15 @@ func (e *Env) CreateCommandRunEndpoint(c *gin.Context) {
 	}
 
 	go func() {
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
 		jobCmd := &pb.JobCommand{Name: command.CmdName, Args: command.Args}
-		e.rpcClient.ScheduleCommand(ctx, jobCmd)
+		_, err := e.rpcClient.ScheduleCommand(ctx, jobCmd)
+
+		if err != nil {
+			log.Printf("%v.ScheduleCommand(_) = _, %v: ", e.rpcClient, err)
+		}
 	}()
 
 	c.JSON(http.StatusCreated, commandRun)
