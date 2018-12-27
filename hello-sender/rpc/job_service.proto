@@ -19,6 +19,10 @@ service JobService {
   // rpc RouteChat(stream RouteNote) returns (stream RouteNote) {}
 }
 
+service DispatcherService {
+  rpc StreamJobStatus(stream JobStatusUpdate) returns (JobStatusUpdatesResult) {}
+}
+
 message JobCommand {
   string name = 1;
   string args = 2;
@@ -38,3 +42,10 @@ message JobStatus {
   string std_out = 3;
 }
 
+message JobStatusUpdate {
+  string stdin_line = 1;
+}
+
+message JobStatusUpdatesResult {
+
+}

@@ -2,7 +2,10 @@ package server
 
 import (
 	// "github.com/fabiosussetto/hello/hello-sender/server/endpoints"
+
+	"io"
 	"log"
+	"net"
 
 	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
 	"github.com/gin-gonic/gin"
@@ -11,14 +14,31 @@ import (
 	"google.golang.org/grpc"
 )
 
+type dispatcherServer struct {
+}
+
+func (s *dispatcherServer) StreamJobStatus(stream pb.DispatcherService_StreamJobStatusServer) error {
+	for {
+		jobStatusUpdate, err := stream.Recv()
+		if err == io.EOF {
+			return stream.SendAndClose(&pb.JobStatusUpdatesResult{})
+		}
+		if err != nil {
+			return err
+		}
+		log.Printf("Status stream: %s\n", jobStatusUpdate.StdinLine)
+	}
+}
+
 func setupDB() *gorm.DB {
 	db, err := gorm.Open("sqlite3", "test.db")
 	if err != nil {
 		panic("failed to connect database")
 	}
 	db.Exec("PRAGMA foreign_keys = ON;")
-	db.LogMode(true)
-	db.AutoMigrate(&Command{}, &CommandRun{})
+	// db.LogMode(true)
+
+	// db.AutoMigrate(&Command{}, &CommandRun{})
 
 	return db
 }
@@ -31,6 +51,21 @@ func setupRPC() (*grpc.ClientConn, pb.JobServiceClient) {
 	return conn, pb.NewJobServiceClient(conn)
 }
 
+func setupRPCServer() {
+	log.Println("Starting gRPC server")
+
+	lis, err := net.Listen("tcp", "localhost:1235")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	grpcServer := grpc.NewServer()
+
+	pb.RegisterDispatcherServiceServer(grpcServer, &dispatcherServer{})
+
+	grpcServer.Serve(lis)
+}
+
 func StartServer() {
 	db := setupDB()
 	defer db.Close()
@@ -38,7 +73,9 @@ func StartServer() {
 	rpcConn, rpcClient := setupRPC()
 	defer rpcConn.Close()
 
-	// Migrate the schema
+	go func() {
+		setupRPCServer()
+	}()
 
 	router := gin.Default()
 

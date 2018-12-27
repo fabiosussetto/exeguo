@@ -56,6 +56,17 @@ func (s *jobServiceServer) QueryJobStatus(ctx context.Context, req *pb.JobStatus
 	return jobStatus, nil
 }
 
+func connectToDispatcher() (*grpc.ClientConn, pb.DispatcherServiceClient) {
+	conn, err := grpc.Dial("localhost:1235", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("fail to dial: %v", err)
+	}
+
+	client := pb.NewDispatcherServiceClient(conn)
+
+	return conn, client
+}
+
 func startServer(workerPool *hw.WorkerPool) {
 	// lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	log.Infoln("Starting gRPC server")
@@ -77,11 +88,16 @@ func start() {
 		FullTimestamp: true,
 	})
 
-	workerPool = hw.NewWorkerPool(numWorkers)
+	dispatcherConn, dispatcherClient := connectToDispatcher()
+	defer dispatcherConn.Close()
+
+	workerPool = hw.NewWorkerPool(numWorkers, dispatcherClient)
 
 	go func() {
 		startServer(workerPool)
 	}()
+
+	log.Info("Connected to Dispatcher server")
 
 	shutdownChan := make(chan os.Signal)
 

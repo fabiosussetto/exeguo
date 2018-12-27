@@ -6,11 +6,12 @@ import (
 
 	"github.com/go-cmd/cmd"
 	log "github.com/sirupsen/logrus"
+
+	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
 )
 
 type WorkerPool struct {
 	NumWorkers int
-
 	jobCounter uint64
 
 	terminationFlag  uint64
@@ -25,6 +26,8 @@ type WorkerPool struct {
 	workersDoneChan chan struct{}
 	workersWg       sync.WaitGroup
 	shutdownWg      sync.WaitGroup
+
+	dispatcherClient pb.DispatcherServiceClient
 }
 
 type JobCmd struct {
@@ -34,9 +37,10 @@ type JobCmd struct {
 	Dir  string
 }
 
-func NewWorkerPool(numWorkers int) *WorkerPool {
+func NewWorkerPool(numWorkers int, dispatcherClient pb.DispatcherServiceClient) *WorkerPool {
 	return &WorkerPool{
-		NumWorkers: numWorkers,
+		NumWorkers:       numWorkers,
+		dispatcherClient: dispatcherClient,
 
 		jobMap: make(map[uint64]*Job),
 	}
