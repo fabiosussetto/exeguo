@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/jinzhu/gorm"
 
@@ -47,6 +46,20 @@ func (e *Env) CommandDetailEndpoint(c *gin.Context) {
 	c.JSON(http.StatusOK, command)
 }
 
+func (e *Env) UpdateCommandEndpoint(c *gin.Context) {
+	var command Command
+
+	if e.db.First(&command, c.Param("id")).RecordNotFound() {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+		return
+	}
+
+	c.BindJSON(&command)
+
+	e.db.Save(&command)
+	c.JSON(http.StatusOK, command)
+}
+
 func (e *Env) DeleteCommandEndpoint(c *gin.Context) {
 	var command Command
 
@@ -79,11 +92,11 @@ func (e *Env) CreateCommandRunEndpoint(c *gin.Context) {
 	}
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// defer cancel()
 
 		jobCmd := &pb.JobCommand{Name: command.CmdName, Args: command.Args}
-		_, err := e.rpcClient.ScheduleCommand(ctx, jobCmd)
+		_, err := e.rpcClient.ScheduleCommand(context.Background(), jobCmd)
 
 		if err != nil {
 			log.Printf("%v.ScheduleCommand(_) = _, %v: ", e.rpcClient, err)

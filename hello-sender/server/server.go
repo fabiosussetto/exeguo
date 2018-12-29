@@ -1,34 +1,16 @@
 package server
 
 import (
-	// "github.com/fabiosussetto/hello/hello-sender/server/endpoints"
-
-	"io"
 	"log"
 	"net"
 
 	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
+	rpcserver "github.com/fabiosussetto/hello/hello-sender/rpcserver"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"google.golang.org/grpc"
 )
-
-type dispatcherServer struct {
-}
-
-func (s *dispatcherServer) StreamJobStatus(stream pb.DispatcherService_StreamJobStatusServer) error {
-	for {
-		jobStatusUpdate, err := stream.Recv()
-		if err == io.EOF {
-			return stream.SendAndClose(&pb.JobStatusUpdatesResult{})
-		}
-		if err != nil {
-			return err
-		}
-		log.Printf("Status stream: %s\n", jobStatusUpdate.StdinLine)
-	}
-}
 
 func setupDB() *gorm.DB {
 	db, err := gorm.Open("sqlite3", "test.db")
@@ -38,20 +20,21 @@ func setupDB() *gorm.DB {
 
 	db.Exec("PRAGMA foreign_keys = ON;")
 	db.LogMode(true)
-	db.AutoMigrate(&Command{}, &CommandRun{})
+
+	db.AutoMigrate(&TargetHost{}, &ExecutionPlan{}, &ExecutionPlanHost{}, &RunStatus{})
 
 	return db
 }
 
-func setupRPC() (*grpc.ClientConn, pb.JobServiceClient) {
-	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
-	}
-	return conn, pb.NewJobServiceClient(conn)
-}
+// func setupRPC() (*grpc.ClientConn, pb.JobServiceClient) {
+// 	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
+// 	if err != nil {
+// 		log.Fatalf("fail to dial: %v", err)
+// 	}
+// 	return conn, pb.NewJobServiceClient(conn)
+// }
 
-func setupRPCServer() {
+func setupRPCServer(db *gorm.DB) {
 	log.Println("Starting gRPC server")
 
 	lis, err := net.Listen("tcp", "localhost:1235")
@@ -61,39 +44,43 @@ func setupRPCServer() {
 
 	grpcServer := grpc.NewServer()
 
-	pb.RegisterDispatcherServiceServer(grpcServer, &dispatcherServer{})
+	pb.RegisterDispatcherServiceServer(grpcServer, &rpcserver.DispatcherServer{DB: db})
 
 	grpcServer.Serve(lis)
+
+	// TODO: use grpcServer.GracefulStop
 }
 
 func StartServer() {
 	db := setupDB()
 	defer db.Close()
 
-	rpcConn, rpcClient := setupRPC()
-	defer rpcConn.Close()
+	// rpcConn, rpcClient := setupRPC()
+	// defer rpcConn.Close()
 
 	go func() {
-		setupRPCServer()
+		setupRPCServer(db)
 	}()
 
 	router := gin.Default()
 
-	env := &Env{db: db, rpcClient: rpcClient}
+	// env := &Env{db: db, rpcClient: rpcClient}
+	env := &Env{db: db}
 
 	v1 := router.Group("/v1")
 	{
-		commandsR := v1.Group("/commands")
+		commandsR := v1.Group("/hosts")
 		{
-			commandsR.GET("/", env.ListCommandsEndpoint)
-			commandsR.POST("/", env.CreateCommandEndpoint)
-			commandsR.GET("/:id", env.CommandDetailEndpoint)
-			commandsR.DELETE("/:id", env.DeleteCommandEndpoint)
+			commandsR.GET("/", env.HostListEndpoint)
+			commandsR.POST("/", env.HostCreateEndpoint)
+			// commandsR.GET("/:id", env.CommandDetailEndpoint)
+			commandsR.PUT("/:id", env.HostUpdateEndpoint)
+			commandsR.DELETE("/:id", env.HostDeleteEndpoint)
 		}
 
-		commandRunR := v1.Group("/command-runs")
+		commandRunR := v1.Group("/exec-plans")
 		{
-			commandRunR.POST("/", env.CreateCommandRunEndpoint)
+			commandRunR.POST("/", env.ExecutionPlanCreateEndpoint)
 		}
 
 	}
