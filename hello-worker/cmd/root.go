@@ -5,10 +5,10 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"regexp"
 
 	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
 	hw "github.com/fabiosussetto/hello/hello-worker/lib"
-	hwServer "github.com/fabiosussetto/hello/hello-worker/server"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -17,6 +17,7 @@ import (
 var numWorkers int
 
 var workerPool *hw.WorkerPool
+var bindAddress string
 
 var rootCmd = &cobra.Command{
 	Use:   "hello",
@@ -29,53 +30,40 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().IntVarP(&numWorkers, "workers", "w", 4, "number of workers (defaults to 4)")
+	rootCmd.PersistentFlags().StringVarP(&bindAddress, "host", "H", "localhost:1234", "host:port to listen on")
 }
 
-// type jobServiceServer struct {
-// 	WorkerPool *hw.WorkerPool
-// }
+type jobServiceServer struct {
+	WorkerPool *hw.WorkerPool
+}
 
-// func (s *jobServiceServer) ScheduleCommand(ctx context.Context, jobCmd *pb.JobCommand) (*pb.JobCommandResult, error) {
-// 	myJobCmd := hw.JobCmd{Name: jobCmd.Name, Args: regexp.MustCompile("\\s+").Split(jobCmd.Args, -1)}
+func (s *jobServiceServer) ScheduleCommand(command *pb.JobCommand, stream pb.JobService_ScheduleCommandServer) error {
+	job := s.WorkerPool.RunCmd(hw.JobCmd{Name: command.Name, Args: regexp.MustCompile("\\s+").Split(command.Args, -1)})
 
-// 	job := s.WorkerPool.RunCmd(myJobCmd)
+	for jobStdout := range job.StdoutChan {
+		statusUpdate := &pb.JobStatusUpdate{StdinLine: jobStdout}
 
-// 	return &pb.JobCommandResult{JobId: job.ID}, nil
-// }
+		if err := stream.Send(statusUpdate); err != nil {
+			// return err
+			log.Fatalf("Failed to send a status update: %v", err)
+		}
 
-// func (s *jobServiceServer) QueryJobStatus(ctx context.Context, req *pb.JobStatusRequest) (*pb.JobStatus, error) {
-// 	job := s.WorkerPool.GetJobByID(req.JobId)
-
-// 	jobStatus := &pb.JobStatus{
-// 		CommandName: job.CmdStatus.Cmd,
-// 		StdOut:      strings.Join(job.CmdStatus.Stdout, "\n"),
-// 	}
-
-// 	return jobStatus, nil
-// }
-
-func connectToDispatcher() (*grpc.ClientConn, pb.DispatcherServiceClient) {
-	conn, err := grpc.Dial("localhost:1235", grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("fail to dial: %v", err)
 	}
 
-	client := pb.NewDispatcherServiceClient(conn)
-
-	return conn, client
+	return nil
 }
 
 func startServer(workerPool *hw.WorkerPool) {
 	log.Infoln("Starting gRPC server")
 
-	lis, err := net.Listen("tcp", "localhost:1234")
+	lis, err := net.Listen("tcp", bindAddress)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
 	grpcServer := grpc.NewServer()
 
-	pb.RegisterJobServiceServer(grpcServer, &hwServer.JobServiceServer{WorkerPool: workerPool})
+	pb.RegisterJobServiceServer(grpcServer, &jobServiceServer{WorkerPool: workerPool})
 
 	grpcServer.Serve(lis)
 }
@@ -85,16 +73,11 @@ func start() {
 		FullTimestamp: true,
 	})
 
-	dispatcherConn, dispatcherClient := connectToDispatcher()
-	defer dispatcherConn.Close()
-
-	workerPool = hw.NewWorkerPool(numWorkers, dispatcherClient)
+	workerPool = hw.NewWorkerPool(numWorkers)
 
 	go func() {
 		startServer(workerPool)
 	}()
-
-	log.Info("Connected to Dispatcher server")
 
 	shutdownChan := make(chan os.Signal)
 

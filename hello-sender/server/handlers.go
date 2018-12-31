@@ -57,8 +57,6 @@ func (e *Env) HostDeleteEndpoint(c *gin.Context) {
 	c.JSON(http.StatusOK, nil)
 }
 
-///
-
 func (e *Env) ExecutionPlanCreateEndpoint(c *gin.Context) {
 	var execPlan ExecutionPlan
 
@@ -67,20 +65,11 @@ func (e *Env) ExecutionPlanCreateEndpoint(c *gin.Context) {
 		return
 	}
 
-	// log.Printf("Exec plan: %+v\n", execPlan)
-
-	// execPlan := ExecutionPlan{
-	// 	CmdName: "test_cmd",
-	// 	Args:    "5 2",
-	// 	PlanHosts: []ExecutionPlanHost{
-	// 		{TargetHost: TargetHost{Name: "Blue", Address: "localhost:1234"}},
-	// 		{TargetHost: TargetHost{Name: "Red", Address: "localhost:2234"}},
-	// 	},
-	// }
-
 	if err := e.db.Save(&execPlan).Error; err != nil {
 		log.Printf("Error creating exec plan: %s", err)
 	}
+
+	go RunExecutionPlan(&execPlan)
 
 	c.JSON(http.StatusCreated, execPlan)
 }

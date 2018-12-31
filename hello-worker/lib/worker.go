@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"context"
 	"io"
 	"strings"
 	"sync/atomic"
@@ -21,25 +20,16 @@ type Worker struct {
 }
 
 func NewWorker(pool *WorkerPool, ID int) *Worker {
-	gRPCStream, err := pool.dispatcherClient.StreamJobStatus(context.Background())
-
-	if err != nil {
-		log.Fatalf("%v.StreamJobStatus(_) = _, %v", pool.dispatcherClient, err)
-	}
-
 	return &Worker{
-		pool:       pool,
-		ID:         ID,
-		logger:     log.WithFields(log.Fields{"worker_id": ID}),
-		gRPCStream: gRPCStream,
+		pool:   pool,
+		ID:     ID,
+		logger: log.WithFields(log.Fields{"worker_id": ID}),
 	}
 }
 
 func (w *Worker) Start() {
 	go func() {
 		defer w.pool.workersWg.Done()
-
-		defer w.closeStatusUpdateStreaming()
 
 		w.logger.Infof("Ready to process jobs")
 
@@ -81,14 +71,6 @@ func (w *Worker) streamStatusUpdate(status *cmd.Status) {
 	}
 }
 
-func (w *Worker) closeStatusUpdateStreaming() {
-	_, err := w.gRPCStream.CloseAndRecv()
-	if err != nil {
-		log.Fatalf("%v.CloseAndRecv() got error %v, want %v", w.gRPCStream, err, nil)
-	}
-	w.logger.Info("Closed gRPC streaming to Dispatcher")
-}
-
 func (w *Worker) process(job *Job) {
 	statusChan := job.cmd.Start() // non-blocking
 
@@ -103,7 +85,9 @@ func (w *Worker) process(job *Job) {
 			// fmt.Println(status.Stdout[n-1])
 			w.logger.Infof("Job #%d output: %s", job.ID, status.Stdout)
 
-			w.streamStatusUpdate(&status)
+			go func() {
+				job.StdoutChan <- strings.Join(status.Stdout, "\n")
+			}()
 		}
 	}()
 
@@ -112,11 +96,15 @@ func (w *Worker) process(job *Job) {
 		w.logger.Warnf("Forcefully stopping job #%d ...", job.ID)
 		job.cmd.Stop()
 		ticker.Stop()
+		close(job.StdoutChan)
 	case finalStatus := <-statusChan:
 		ticker.Stop()
 		job.CmdStatus = finalStatus
 
-		w.streamStatusUpdate(&finalStatus)
+		go func() {
+			defer close(job.StdoutChan)
+			job.StdoutChan <- strings.Join(finalStatus.Stdout, "\n")
+		}()
 
 		if !finalStatus.Complete {
 			w.logger.Warnf("Forced termination of job #%d", job.ID)

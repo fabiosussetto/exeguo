@@ -23,7 +23,7 @@ type ExecutionPlan struct {
 type ExecutionPlanHost struct {
 	ID              uint       `json:"id"`
 	ExecutionPlanID uint       `sql:"type:uint REFERENCES execution_plans(id) ON DELETE CASCADE" json:"executionPlanId"`
-	TargetHostID    uint       `sql:"type:uint REFERENCES target_hosts(id) ON DELETE CASCADE" json:"targetHostId" binding:"required"`
+	TargetHostID    uint       `sql:"type:uint REFERENCES target_hosts(id) ON DELETE CASCADE" json:"targetHostId"`
 	TargetHost      TargetHost `json:"targetHost" binding:"required,dive"`
 }
 

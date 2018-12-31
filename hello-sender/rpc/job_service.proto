@@ -5,9 +5,9 @@ package rpc;
 // Interface exported by the server.
 service JobService {
 
-  rpc ScheduleCommand(JobCommand) returns (JobCommandResult) {}
+  // rpc ScheduleCommand(JobCommand) returns (JobCommandResult) {}
 
-  rpc QueryJobStatus(JobStatusRequest) returns (JobStatus) {}
+  // rpc QueryJobStatus(JobStatusRequest) returns (JobStatus) {}
 
   // A server-to-client streaming RPC.
   // rpc ListFeatures(Rectangle) returns (stream Feature) {}
@@ -16,11 +16,17 @@ service JobService {
   // rpc RecordRoute(stream Point) returns (RouteSummary) {}
 
   // A Bidirectional streaming RPC.
-  // rpc RouteChat(stream RouteNote) returns (stream RouteNote) {}
+  // rpc JobMessages(stream JobMessage) returns (stream JobMessage) {}
+  rpc ScheduleCommand(JobCommand) returns (stream JobStatusUpdate) {}
 }
 
 service DispatcherService {
   rpc StreamJobStatus(stream JobStatusUpdate) returns (JobStatusUpdatesResult) {}
+}
+
+message JobMessage {
+  JobCommand command = 1;
+  JobStatusUpdate status_update = 2;
 }
 
 message JobCommand {

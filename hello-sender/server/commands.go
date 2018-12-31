@@ -2,43 +2,55 @@ package server
 
 import (
 	"context"
+	"io"
 	"log"
+	"sync"
 
 	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
 	"google.golang.org/grpc"
 )
 
-func runExecutionPlan(execPlan *ExecutionPlan) {
+func RunExecutionPlan(execPlan *ExecutionPlan) {
+	var wg sync.WaitGroup
+	wg.Add(len(execPlan.PlanHosts))
 
 	for _, planHost := range execPlan.PlanHosts {
-		conn, err := grpc.Dial(planHost.TargetHost.Address, grpc.WithInsecure())
+		go func(planHost ExecutionPlanHost) {
+			defer wg.Done()
 
-		if err != nil {
-			log.Fatalf("fail to dial: %v", err)
-		}
+			log.Printf("Connecting to client: %v", planHost)
+			conn, err := grpc.Dial(planHost.TargetHost.Address, grpc.WithInsecure())
 
-		rpcClient := pb.NewJobServiceClient(conn)
+			if err != nil {
+				log.Printf("fail to dial: %v", err)
+				return
+			}
 
-		jobCmd := &pb.JobCommand{Name: execPlan.CmdName, Args: execPlan.Args}
-		_, rpcErr := rpcClient.ScheduleCommand(context.Background(), jobCmd)
+			rpcClient := pb.NewJobServiceClient(conn)
+			jobCmd := &pb.JobCommand{Name: execPlan.CmdName, Args: execPlan.Args}
+			stream, err := rpcClient.ScheduleCommand(context.Background(), jobCmd)
 
-		if rpcErr != nil {
-			log.Printf("%v.ScheduleCommand(_) = _, %v: ", rpcClient, err)
-		}
+			if err != nil {
+				log.Printf("fail to create rpc stream: %v", err)
+				return
+			}
+
+			for {
+				in, err := stream.Recv()
+				if err == io.EOF {
+					// read done.
+					// close(waitc)
+					log.Println("Received EOF")
+					return
+				}
+				if err != nil {
+					log.Printf("Failed to receive message : %v", err)
+					return
+				}
+
+				log.Printf("Got cmd output: %s", in.StdinLine)
+			}
+		}(planHost)
 	}
-
-	// conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
-	// if err != nil {
-	// 	log.Fatalf("fail to dial: %v", err)
-	// }
-
-	// // ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	// // defer cancel()
-
-	// jobCmd := &pb.JobCommand{Name: command.CmdName, Args: command.Args}
-	// _, err := rpcClient.ScheduleCommand(context.Background(), jobCmd)
-
-	// if err != nil {
-	// 	log.Printf("%v.ScheduleCommand(_) = _, %v: ", rpcClient, err)
-	// }
+	wg.Wait()
 }
