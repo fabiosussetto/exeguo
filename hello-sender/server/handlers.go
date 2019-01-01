@@ -57,6 +57,8 @@ func (e *Env) HostDeleteEndpoint(c *gin.Context) {
 	c.JSON(http.StatusOK, nil)
 }
 
+////
+
 func (e *Env) ExecutionPlanCreateEndpoint(c *gin.Context) {
 	var execPlan ExecutionPlan
 
@@ -69,7 +71,58 @@ func (e *Env) ExecutionPlanCreateEndpoint(c *gin.Context) {
 		log.Printf("Error creating exec plan: %s", err)
 	}
 
-	go RunExecutionPlan(&execPlan)
-
 	c.JSON(http.StatusCreated, execPlan)
+}
+
+////
+
+func (e *Env) ExecutionPlanDetailEndpoint(c *gin.Context) {
+	var execPlan ExecutionPlan
+
+	q := e.db.Preload("PlanHosts.TargetHost")
+
+	if q.First(&execPlan, c.Param("id")).RecordNotFound() {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, execPlan)
+}
+
+///
+
+func (e *Env) ExecutionPlanRunCreateEndpoint(c *gin.Context) {
+	var execPlanRun ExecutionPlanRun
+
+	if err := c.ShouldBindJSON(&execPlanRun); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := e.db.Save(&execPlanRun).Error; err != nil {
+		log.Printf("Error creating exec plan run: %s", err)
+	}
+
+	q := e.db.Preload("ExecutionPlan.PlanHosts.TargetHost")
+
+	var savedExecPlanRun ExecutionPlanRun
+
+	q.First(&savedExecPlanRun, execPlanRun.ID)
+
+	go RunExecutionPlan(e.db, &savedExecPlanRun)
+
+	c.JSON(http.StatusCreated, savedExecPlanRun)
+}
+
+func (e *Env) ExecutionPlanRunDetailEndpoint(c *gin.Context) {
+	var execPlanRun ExecutionPlanRun
+
+	q := e.db.Preload("ExecutionPlan").Preload("RunStatuses.ExecutionPlanHost.TargetHost")
+
+	if q.First(&execPlanRun, c.Param("id")).RecordNotFound() {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, execPlanRun)
 }

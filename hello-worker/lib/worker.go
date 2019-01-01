@@ -1,13 +1,9 @@
 package lib
 
 import (
-	"io"
-	"strings"
 	"sync/atomic"
 	"time"
 
-	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
-	"github.com/go-cmd/cmd"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -15,8 +11,6 @@ type Worker struct {
 	ID     int
 	pool   *WorkerPool
 	logger *log.Entry
-
-	gRPCStream pb.DispatcherService_StreamJobStatusClient
 }
 
 func NewWorker(pool *WorkerPool, ID int) *Worker {
@@ -56,21 +50,6 @@ func (w *Worker) Start() {
 	}()
 }
 
-func (w *Worker) streamStatusUpdate(status *cmd.Status) {
-	statusUpdate := &pb.JobStatusUpdate{StdinLine: strings.Join(status.Stdout, "\n")}
-
-	err := w.gRPCStream.Send(statusUpdate)
-
-	if err == io.EOF {
-		w.logger.Warn("Lost gRPC connection to Dispatcher")
-		return
-	}
-
-	if err != nil {
-		w.logger.Fatalf("%v.Send(%v) = %v", w.gRPCStream, statusUpdate, err)
-	}
-}
-
 func (w *Worker) process(job *Job) {
 	statusChan := job.cmd.Start() // non-blocking
 
@@ -83,10 +62,10 @@ func (w *Worker) process(job *Job) {
 			job.CmdStatus = status
 			// n := len(status.Stdout)
 			// fmt.Println(status.Stdout[n-1])
-			w.logger.Infof("Job #%d output: %s", job.ID, status.Stdout)
+			w.logger.Infof("Job #%d status: %#v", job.ID, status)
 
 			go func() {
-				job.StdoutChan <- strings.Join(status.Stdout, "\n")
+				job.StdoutChan <- &status
 			}()
 		}
 	}()
@@ -103,7 +82,7 @@ func (w *Worker) process(job *Job) {
 
 		go func() {
 			defer close(job.StdoutChan)
-			job.StdoutChan <- strings.Join(finalStatus.Stdout, "\n")
+			job.StdoutChan <- &finalStatus
 		}()
 
 		if !finalStatus.Complete {
@@ -111,6 +90,6 @@ func (w *Worker) process(job *Job) {
 			return
 		}
 
-		w.logger.Infof("Job #%d completed. Output: %s", job.ID, finalStatus.Stdout)
+		w.logger.Infof("Job #%d completed. Final status: %#v", job.ID, finalStatus)
 	}
 }

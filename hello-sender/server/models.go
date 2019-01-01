@@ -27,21 +27,30 @@ type ExecutionPlanHost struct {
 	TargetHost      TargetHost `json:"targetHost" binding:"required,dive"`
 }
 
-// type ExecutionPlanLog struct {
-// 	ID        uint      `json:"id"`
-// 	ExecutionPlanID uint       `sql:"type:uint REFERENCES execution_plans(id) ON DELETE CASCADE" json:"executionPlanId"`
+type ExecutionPlanRun struct {
+	ID              uint          `json:"id"`
+	ExecutionPlanID uint          `sql:"type:uint REFERENCES execution_plans(id) ON DELETE CASCADE" json:"executionPlanId" binding:"required"`
+	ExecutionPlan   ExecutionPlan `json:"executionPlan" binding:"-"`
 
-// 	CreatedAt time.Time `json:"createdAt"`
-// }
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	RunStatuses []RunStatus `json:"runStatuses"`
+}
 
 type RunStatus struct {
 	ID                  uint `json:"id"`
-	ExecutionPlanHostID uint `sql:"type:uint REFERENCES execution_plan_hosts(id) ON DELETE CASCADE" json:"executionPlanHostId" binding:"required"`
+	ExecutionPlanRunID  uint `sql:"type:uint REFERENCES execution_plan_runs(id) ON DELETE CASCADE" json:"executionPlanRunId"`
+	ExecutionPlanHostID uint `sql:"type:uint REFERENCES execution_plan_hosts(id) ON DELETE CASCADE" json:"executionPlanHostId"`
+	ExecutionPlanHost   ExecutionPlanHost
 
+	Cmd         string
+	PID         int64
+	Complete    bool
 	Stdout      string
 	Stderr      string
 	StartedAt   *time.Time
 	CompletedAt *time.Time
-	Runtime     float64
-	ExitCode    int
+	Runtime     float32
+	ExitCode    int64
 }

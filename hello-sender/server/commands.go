@@ -5,18 +5,33 @@ import (
 	"io"
 	"log"
 	"sync"
+	"time"
+
+	"github.com/jinzhu/gorm"
 
 	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
 	"google.golang.org/grpc"
 )
 
-func RunExecutionPlan(execPlan *ExecutionPlan) {
+func RunExecutionPlan(db *gorm.DB, execPlanRun *ExecutionPlanRun) {
 	var wg sync.WaitGroup
+
+	execPlan := execPlanRun.ExecutionPlan
+
+	log.Printf("Starting execution plan: %d", execPlan.ID)
+
 	wg.Add(len(execPlan.PlanHosts))
 
 	for _, planHost := range execPlan.PlanHosts {
 		go func(planHost ExecutionPlanHost) {
 			defer wg.Done()
+
+			runStatus := RunStatus{}
+
+			db.FirstOrCreate(&runStatus, RunStatus{
+				ExecutionPlanRunID:  execPlanRun.ID,
+				ExecutionPlanHostID: planHost.TargetHostID,
+			})
 
 			log.Printf("Connecting to client: %v", planHost)
 			conn, err := grpc.Dial(planHost.TargetHost.Address, grpc.WithInsecure())
@@ -38,8 +53,6 @@ func RunExecutionPlan(execPlan *ExecutionPlan) {
 			for {
 				in, err := stream.Recv()
 				if err == io.EOF {
-					// read done.
-					// close(waitc)
 					log.Println("Received EOF")
 					return
 				}
@@ -48,7 +61,22 @@ func RunExecutionPlan(execPlan *ExecutionPlan) {
 					return
 				}
 
-				log.Printf("Got cmd output: %s", in.StdinLine)
+				log.Printf("Got cmd output: %#v", in)
+
+				startedAt := time.Unix(0, in.StartTs)
+				completedAt := time.Unix(0, in.StopTs)
+
+				db.Model(&runStatus).Updates(RunStatus{
+					Cmd:         in.Cmd,
+					PID:         in.PID,
+					Complete:    in.Complete,
+					Stdout:      in.Stdout,
+					Stderr:      in.Stderr,
+					StartedAt:   &startedAt,
+					CompletedAt: &completedAt,
+					Runtime:     in.Runtime,
+					ExitCode:    in.Exit,
+				})
 			}
 		}(planHost)
 	}

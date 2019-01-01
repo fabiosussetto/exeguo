@@ -16,14 +16,10 @@ type WorkerPool struct {
 	statusChan       chan struct{}
 	statusForcedChan chan struct{}
 
-	jobMap map[uint64]*Job
-
 	jobChan         chan *Job
 	cancelChan      chan struct{}
 	forceCancelChan chan struct{}
-	workersDoneChan chan struct{}
 	workersWg       sync.WaitGroup
-	shutdownWg      sync.WaitGroup
 }
 
 type JobCmd struct {
@@ -36,8 +32,6 @@ type JobCmd struct {
 func NewWorkerPool(numWorkers int) *WorkerPool {
 	return &WorkerPool{
 		NumWorkers: numWorkers,
-
-		jobMap: make(map[uint64]*Job),
 	}
 }
 
@@ -48,18 +42,11 @@ func (pool *WorkerPool) RunCmd(jobCmd JobCmd) *Job {
 
 	job := NewJob(atomic.LoadUint64(&pool.jobCounter), cmd)
 
-	pool.jobMap[job.ID] = job
-
-	// avoid blocking if queue is full
 	go func() {
 		pool.jobChan <- job
 	}()
 
 	return job
-}
-
-func (pool *WorkerPool) GetJobByID(jobID uint64) *Job {
-	return pool.jobMap[jobID]
 }
 
 func (pool *WorkerPool) Start() (<-chan struct{}, <-chan struct{}) {

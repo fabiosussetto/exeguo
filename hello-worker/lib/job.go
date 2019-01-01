@@ -8,7 +8,7 @@ type Job struct {
 	ID        uint64
 	CmdStatus cmd.Status
 
-	StdoutChan chan string
+	StdoutChan chan *cmd.Status
 
 	worker *Worker
 	cmd    *cmd.Cmd
@@ -17,7 +17,7 @@ type Job struct {
 func NewJob(ID uint64, command *cmd.Cmd) *Job {
 	return &Job{
 		ID:         ID,
-		StdoutChan: make(chan string),
+		StdoutChan: make(chan *cmd.Status),
 		cmd:        command,
 		CmdStatus: cmd.Status{
 			Cmd:      "",

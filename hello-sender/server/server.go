@@ -1,19 +1,13 @@
 package server
 
 import (
-	"log"
-	"net"
-
-	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
-	rpcserver "github.com/fabiosussetto/hello/hello-sender/rpcserver"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"google.golang.org/grpc"
 )
 
 func setupDB() *gorm.DB {
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "test.sqlite")
 	if err != nil {
 		panic("failed to connect database")
 	}
@@ -21,50 +15,17 @@ func setupDB() *gorm.DB {
 	db.Exec("PRAGMA foreign_keys = ON;")
 	db.LogMode(true)
 
-	db.AutoMigrate(&TargetHost{}, &ExecutionPlan{}, &ExecutionPlanHost{}, &RunStatus{})
+	db.AutoMigrate(&TargetHost{}, &ExecutionPlan{}, &ExecutionPlanHost{}, &ExecutionPlanRun{}, &RunStatus{})
 
 	return db
-}
-
-// func setupRPC() (*grpc.ClientConn, pb.JobServiceClient) {
-// 	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
-// 	if err != nil {
-// 		log.Fatalf("fail to dial: %v", err)
-// 	}
-// 	return conn, pb.NewJobServiceClient(conn)
-// }
-
-func setupRPCServer(db *gorm.DB) {
-	log.Println("Starting gRPC server")
-
-	lis, err := net.Listen("tcp", "localhost:1235")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-
-	grpcServer := grpc.NewServer()
-
-	pb.RegisterDispatcherServiceServer(grpcServer, &rpcserver.DispatcherServer{DB: db})
-
-	grpcServer.Serve(lis)
-
-	// TODO: use grpcServer.GracefulStop
 }
 
 func StartServer() {
 	db := setupDB()
 	defer db.Close()
 
-	// rpcConn, rpcClient := setupRPC()
-	// defer rpcConn.Close()
-
-	go func() {
-		setupRPCServer(db)
-	}()
-
 	router := gin.Default()
 
-	// env := &Env{db: db, rpcClient: rpcClient}
 	env := &Env{db: db}
 
 	v1 := router.Group("/v1")
@@ -81,6 +42,13 @@ func StartServer() {
 		commandRunR := v1.Group("/exec-plans")
 		{
 			commandRunR.POST("/", env.ExecutionPlanCreateEndpoint)
+			commandRunR.GET("/:id", env.ExecutionPlanDetailEndpoint)
+		}
+
+		execPlanRunRoute := v1.Group("/exec-plan-runs")
+		{
+			execPlanRunRoute.POST("/", env.ExecutionPlanRunCreateEndpoint)
+			execPlanRunRoute.GET("/:id", env.ExecutionPlanRunDetailEndpoint)
 		}
 
 	}

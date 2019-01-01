@@ -5,10 +5,10 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"regexp"
 
 	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
 	hw "github.com/fabiosussetto/hello/hello-worker/lib"
+	workerServer "github.com/fabiosussetto/hello/hello-worker/server"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -33,26 +33,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&bindAddress, "host", "H", "localhost:1234", "host:port to listen on")
 }
 
-type jobServiceServer struct {
-	WorkerPool *hw.WorkerPool
-}
-
-func (s *jobServiceServer) ScheduleCommand(command *pb.JobCommand, stream pb.JobService_ScheduleCommandServer) error {
-	job := s.WorkerPool.RunCmd(hw.JobCmd{Name: command.Name, Args: regexp.MustCompile("\\s+").Split(command.Args, -1)})
-
-	for jobStdout := range job.StdoutChan {
-		statusUpdate := &pb.JobStatusUpdate{StdinLine: jobStdout}
-
-		if err := stream.Send(statusUpdate); err != nil {
-			// return err
-			log.Fatalf("Failed to send a status update: %v", err)
-		}
-
-	}
-
-	return nil
-}
-
 func startServer(workerPool *hw.WorkerPool) {
 	log.Infoln("Starting gRPC server")
 
@@ -63,7 +43,7 @@ func startServer(workerPool *hw.WorkerPool) {
 
 	grpcServer := grpc.NewServer()
 
-	pb.RegisterJobServiceServer(grpcServer, &jobServiceServer{WorkerPool: workerPool})
+	pb.RegisterJobServiceServer(grpcServer, &workerServer.JobServiceServer{WorkerPool: workerPool})
 
 	grpcServer.Serve(lis)
 }
