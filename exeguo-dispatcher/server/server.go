@@ -6,8 +6,13 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
-func setupDB() *gorm.DB {
-	db, err := gorm.Open("sqlite3", "test.sqlite")
+type Config struct {
+	ServerAddress string
+	PathToDB      string
+}
+
+func setupDB(config Config) *gorm.DB {
+	db, err := gorm.Open("sqlite3", config.PathToDB)
 	if err != nil {
 		panic("failed to connect database")
 	}
@@ -20,8 +25,8 @@ func setupDB() *gorm.DB {
 	return db
 }
 
-func StartServer() {
-	db := setupDB()
+func StartServer(config Config) {
+	db := setupDB(config)
 	defer db.Close()
 
 	router := gin.Default()
@@ -34,7 +39,6 @@ func StartServer() {
 		{
 			commandsR.GET("/", env.HostListEndpoint)
 			commandsR.POST("/", env.HostCreateEndpoint)
-			// commandsR.GET("/:id", env.CommandDetailEndpoint)
 			commandsR.PUT("/:id", env.HostUpdateEndpoint)
 			commandsR.DELETE("/:id", env.HostDeleteEndpoint)
 		}
@@ -53,5 +57,5 @@ func StartServer() {
 
 	}
 
-	router.Run() // listen and serve on 0.0.0.0:8080
+	router.Run(config.ServerAddress)
 }
