@@ -9,7 +9,7 @@ import (
 
 	"github.com/jinzhu/gorm"
 
-	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
+	pb "github.com/fabiosussetto/exeguo/exeguo-dispatcher/rpc"
 	"google.golang.org/grpc"
 )
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/fabiosussetto/hello/hello-sender/cmd"
+	"github.com/fabiosussetto/exeguo/exeguo-dispatcher/cmd"
 )
 
 func main() {

@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
-	hw "github.com/fabiosussetto/hello/hello-worker/lib"
+	hw "github.com/fabiosussetto/exeguo/exeguo-agent/lib"
+	pb "github.com/fabiosussetto/exeguo/exeguo-dispatcher/rpc"
 )
 
 type JobServiceServer struct {

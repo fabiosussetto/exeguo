@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	s "github.com/fabiosussetto/hello/hello-sender/server"
+	s "github.com/fabiosussetto/exeguo/exeguo-dispatcher/server"
 	"github.com/spf13/cobra"
 )
 

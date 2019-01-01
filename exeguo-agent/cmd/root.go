@@ -6,9 +6,9 @@ import (
 	"os"
 	"os/signal"
 
-	pb "github.com/fabiosussetto/hello/hello-sender/rpc"
-	hw "github.com/fabiosussetto/hello/hello-worker/lib"
-	workerServer "github.com/fabiosussetto/hello/hello-worker/server"
+	pb "github.com/fabiosussetto/exeguo/exeguo-dispatcher/rpc"
+	hw "github.com/fabiosussetto/exeguo/exeguo-agent/lib"
+	workerServer "github.com/fabiosussetto/exeguo/exeguo-agent/server"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
