@@ -1,17 +1,21 @@
 package cmd
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
 
-	pb "github.com/fabiosussetto/exeguo/exeguo-dispatcher/rpc"
 	hw "github.com/fabiosussetto/exeguo/exeguo-agent/lib"
 	workerServer "github.com/fabiosussetto/exeguo/exeguo-agent/server"
+	pb "github.com/fabiosussetto/exeguo/exeguo-dispatcher/rpc"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 var numWorkers int
@@ -31,6 +35,8 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().IntVarP(&numWorkers, "workers", "w", 4, "number of workers (defaults to 4)")
 	rootCmd.PersistentFlags().StringVarP(&bindAddress, "host", "H", "localhost:1234", "host:port to listen on")
+
+	rootCmd.AddCommand(GenCredentialsCmd)
 }
 
 func startServer(workerPool *hw.WorkerPool) {
@@ -41,7 +47,43 @@ func startServer(workerPool *hw.WorkerPool) {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	grpcServer := grpc.NewServer()
+	// tlsConfig := &tls.Config{
+	// 	Certificates: []tls.Certificate{insecure.Cert},
+	// 	ClientCAs:    insecure.CertPool,
+	// 	ClientAuth:   tls.VerifyClientCertIfGiven,
+	// }
+
+	// grpcServer := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
+
+	// Load the certificates from disk
+	certificate, err := tls.LoadX509KeyPair("../certs/server_cert.pem", "../certs/server_key.pem")
+	if err != nil {
+		log.Fatalf("could not load server key pair: %s", err)
+	}
+
+	// Create a certificate pool from the certificate authority
+	certPool := x509.NewCertPool()
+	ca, err := ioutil.ReadFile("../certs/ca_cert.pem")
+	if err != nil {
+		log.Fatalf("could not read ca certificate: %s", err)
+	}
+
+	// Append the client certificates from the CA
+	if ok := certPool.AppendCertsFromPEM(ca); !ok {
+		log.Fatalf("failed to append client certs: %s", err)
+	}
+
+	// creds, err := credentials.NewServerTLSFromFile("../certs/server_cert.pem", "../certs/server_key.pem")
+	// grpcServer := grpc.NewServer(grpc.Creds(creds))
+
+	// Create the TLS credentials
+	creds := credentials.NewTLS(&tls.Config{
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		Certificates: []tls.Certificate{certificate},
+		ClientCAs:    certPool,
+	})
+
+	grpcServer := grpc.NewServer(grpc.Creds(creds))
 
 	pb.RegisterJobServiceServer(grpcServer, &workerServer.JobServiceServer{WorkerPool: workerPool})
 
