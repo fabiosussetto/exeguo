@@ -18,8 +18,8 @@ type TargetHost struct {
 	ID         uint   `json:"id"`
 	Name       string `json:"name"`
 	Address    string `json:"address" binding:"required"`
-	Cert       string `json:"cert"`
-	PrivateKey string `json:"privateKey"`
+	Cert       string `json:"-"`
+	PrivateKey string `json:"-"`
 }
 
 func (h *TargetHost) AfterCreate(tx *gorm.DB) (err error) {

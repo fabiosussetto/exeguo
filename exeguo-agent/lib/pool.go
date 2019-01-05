@@ -1,6 +1,8 @@
 package lib
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -38,7 +40,7 @@ func NewWorkerPool(numWorkers int) *WorkerPool {
 func (pool *WorkerPool) RunCmd(jobCmd JobCmd) *Job {
 	atomic.AddUint64(&pool.jobCounter, 1)
 
-	cmd := cmd.NewCmd(jobCmd.Name, jobCmd.Args...)
+	cmd := cmd.NewCmd("bash", "-c", fmt.Sprintf("%s %s", jobCmd.Name, strings.Join(jobCmd.Args, " ")))
 
 	job := NewJob(atomic.LoadUint64(&pool.jobCounter), cmd)
 

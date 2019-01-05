@@ -60,18 +60,42 @@ func (e *Env) HostDeleteEndpoint(c *gin.Context) {
 ////
 
 func (e *Env) ExecutionPlanCreateEndpoint(c *gin.Context) {
-	var execPlan ExecutionPlan
+	var execPlanSchema HostIDExecutionPlan
 
-	if err := c.ShouldBindJSON(&execPlan); err != nil {
+	if err := c.ShouldBindJSON(&execPlanSchema); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	var hosts []TargetHost
+	var hostIds []uint
+	var planHosts []ExecutionPlanHost
+
+	for _, planHost := range execPlanSchema.PlanHosts {
+		hostIds = append(hostIds, planHost.TargetHostID)
+	}
+
+	e.db.Where("id in (?)", hostIds).Find(&hosts)
+
+	for _, host := range hosts {
+		planHosts = append(planHosts, ExecutionPlanHost{TargetHostID: host.ID})
+	}
+
+	execPlan := &ExecutionPlan{
+		CmdName:   execPlanSchema.CmdName,
+		Args:      execPlanSchema.Args,
+		PlanHosts: planHosts,
 	}
 
 	if err := e.db.Save(&execPlan).Error; err != nil {
 		log.Printf("Error creating exec plan: %s", err)
 	}
 
-	c.JSON(http.StatusCreated, execPlan)
+	var savedExecPlan ExecutionPlan
+
+	e.db.Preload("PlanHosts.TargetHost").First(&savedExecPlan, execPlan.ID)
+
+	c.JSON(http.StatusCreated, savedExecPlan)
 }
 
 ////
