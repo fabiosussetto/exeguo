@@ -10,7 +10,7 @@ install:
 		generate-protobuf
 
 generate-protobuf:
-		protoc -I hello-sender/rpc/ hello-sender/rpc/job_service.proto --go_out=plugins=grpc:rpc
+		cd exeguo-dispatcher && protoc -I rpc/ rpc/job_service.proto --go_out=plugins=grpc:rpc
 
 build-dispatcher: 
 		@echo "Building Dispatcher..."

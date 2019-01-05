@@ -10,7 +10,6 @@ import (
 	"os/signal"
 
 	hw "github.com/fabiosussetto/exeguo/exeguo-agent/lib"
-	workerServer "github.com/fabiosussetto/exeguo/exeguo-agent/server"
 	pb "github.com/fabiosussetto/exeguo/exeguo-dispatcher/rpc"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -75,9 +74,6 @@ func startServer(workerPool *hw.WorkerPool) {
 		log.Fatalf("failed to append client certs: %s", err)
 	}
 
-	// creds, err := credentials.NewServerTLSFromFile("../certs/server_cert.pem", "../certs/server_key.pem")
-	// grpcServer := grpc.NewServer(grpc.Creds(creds))
-
 	// Create the TLS credentials
 	creds := credentials.NewTLS(&tls.Config{
 		ClientAuth:   tls.RequireAndVerifyClientCert,
@@ -87,7 +83,7 @@ func startServer(workerPool *hw.WorkerPool) {
 
 	grpcServer := grpc.NewServer(grpc.Creds(creds))
 
-	pb.RegisterJobServiceServer(grpcServer, &workerServer.JobServiceServer{WorkerPool: workerPool})
+	pb.RegisterJobServiceServer(grpcServer, &hw.JobServiceServer{WorkerPool: workerPool})
 
 	grpcServer.Serve(lis)
 }

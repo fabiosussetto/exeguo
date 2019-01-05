@@ -1,20 +1,24 @@
-package server
+package lib
 
 import (
+	"context"
 	"log"
 	"regexp"
 	"strings"
 
-	hw "github.com/fabiosussetto/exeguo/exeguo-agent/lib"
 	pb "github.com/fabiosussetto/exeguo/exeguo-dispatcher/rpc"
 )
 
 type JobServiceServer struct {
-	WorkerPool *hw.WorkerPool
+	WorkerPool *WorkerPool
+}
+
+func (s *JobServiceServer) Heartbeat(ctx context.Context, pingMsg *pb.HeartbeatPing) (*pb.HeartbeatPong, error) {
+	return &pb.HeartbeatPong{}, nil
 }
 
 func (s *JobServiceServer) ScheduleCommand(command *pb.JobCommand, stream pb.JobService_ScheduleCommandServer) error {
-	job := s.WorkerPool.RunCmd(hw.JobCmd{Name: command.Name, Args: regexp.MustCompile("\\s+").Split(command.Args, -1)})
+	job := s.WorkerPool.RunCmd(JobCmd{Name: command.Name, Args: regexp.MustCompile("\\s+").Split(command.Args, -1)})
 
 	for jobStatus := range job.StdoutChan {
 		statusUpdate := &pb.JobStatusUpdate{

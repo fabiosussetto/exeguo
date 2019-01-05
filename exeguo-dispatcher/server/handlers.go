@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/jinzhu/gorm"
 
@@ -17,6 +19,9 @@ type Env struct {
 
 func (e *Env) HostListEndpoint(c *gin.Context) {
 	var hosts []TargetHost
+
+	e.db.Find(&hosts)
+
 	c.JSON(http.StatusOK, hosts)
 }
 
@@ -149,4 +154,51 @@ func (e *Env) ExecutionPlanRunDetailEndpoint(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, execPlanRun)
+}
+
+type HostStatus struct {
+	HostId uint `json:"hostId" binding:"required"`
+}
+
+type HostStatusResponse struct {
+	Connected bool
+	Error     string
+}
+
+func (e *Env) HostStatusEndpoint(c *gin.Context) {
+	var hostStatusReq HostStatus
+
+	if err := c.ShouldBindJSON(&hostStatusReq); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var host TargetHost
+
+	if e.db.First(&host, hostStatusReq.HostId).RecordNotFound() {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+		return
+	}
+
+	log.Printf("Sending heartbeat request to host id: %s", host.ID)
+
+	rpcClient, conn, err := CreateHostGrpcClient(e.db, &host)
+	defer conn.Close()
+
+	if err != nil {
+		log.Printf("Error connecting to hearbeat handpoint: %s", err)
+		c.JSON(http.StatusOK, &HostStatusResponse{Connected: false})
+	}
+
+	hostDeadline := time.Now().Add(time.Duration(15) * time.Second)
+	ctx, _ := context.WithDeadline(context.Background(), hostDeadline)
+
+	_, err = rpcClient.Heartbeat(ctx, &pb.HeartbeatPing{})
+
+	if err != nil {
+		c.JSON(http.StatusOK, &HostStatusResponse{Connected: false, Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, &HostStatusResponse{Connected: true})
 }

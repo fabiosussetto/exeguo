@@ -62,12 +62,17 @@ func StartServer(config ServerConfig) {
 
 	v1 := router.Group("/v1")
 	{
-		commandsR := v1.Group("/hosts")
+		hostsRoute := v1.Group("/hosts")
 		{
-			commandsR.GET("/", env.HostListEndpoint)
-			commandsR.POST("/", env.HostCreateEndpoint)
-			commandsR.PUT("/:id", env.HostUpdateEndpoint)
-			commandsR.DELETE("/:id", env.HostDeleteEndpoint)
+			hostsRoute.GET("/", env.HostListEndpoint)
+			hostsRoute.POST("/", env.HostCreateEndpoint)
+			hostsRoute.PUT("/:id", env.HostUpdateEndpoint)
+			hostsRoute.DELETE("/:id", env.HostDeleteEndpoint)
+		}
+
+		hostStatusRoute := v1.Group("/host-statuses")
+		{
+			hostStatusRoute.POST("/", env.HostStatusEndpoint)
 		}
 
 		commandRunR := v1.Group("/exec-plans")
