@@ -84,7 +84,7 @@ var GenCredentialsCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		serverAddress := "127.0.0.1"
-		rootCertData, err := security.GenerateRootCertAndKey(serverAddress)
+		rootCertData, err := security.GenerateRootCertAndKey()
 
 		if err != nil {
 			log.Fatalf("generating root cert/key: %v", err)
@@ -96,7 +96,7 @@ var GenCredentialsCmd = &cobra.Command{
 			log.Fatalf("generating server cert/key: %v", err)
 		}
 
-		clientCertData, err := security.GenerateServerCertAndKey(rootCertData, serverAddress)
+		clientCertData, err := security.GenerateClientCertAndKey(rootCertData)
 
 		if err != nil {
 			log.Fatalf("generating server cert/key: %v", err)

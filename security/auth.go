@@ -72,7 +72,7 @@ func CreatePrivateKey() (*rsa.PrivateKey, []byte, error) {
 	return key, rootKeyPEM, nil
 }
 
-func GenerateRootCertAndKey(ipAddress string) (*CertData, error) {
+func GenerateRootCertAndKey() (*CertData, error) {
 	rootKey, rootKeyPEM, err := CreatePrivateKey()
 
 	if err != nil {
@@ -90,7 +90,7 @@ func GenerateRootCertAndKey(ipAddress string) (*CertData, error) {
 	rootCertTmpl.IsCA = true
 	rootCertTmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature
 	rootCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
-	rootCertTmpl.IPAddresses = []net.IP{net.ParseIP(ipAddress)}
+	// rootCertTmpl.IPAddresses = []net.IP{net.ParseIP(ipAddress)}
 
 	rootCert, rootCertPEM, err := CreateCert(rootCertTmpl, rootCertTmpl, &rootKey.PublicKey, rootKey)
 	if err != nil {
@@ -101,7 +101,7 @@ func GenerateRootCertAndKey(ipAddress string) (*CertData, error) {
 	return &CertData{Cert: rootCert, CertPEM: rootCertPEM, PrivateKey: rootKey, PrivateKeyPEM: rootKeyPEM}, nil
 }
 
-func GenerateServerCertAndKey(caCertData *CertData, ipAddress string) (*CertData, error) {
+func GenerateServerCertAndKey(caCertData *CertData, address string) (*CertData, error) {
 	key, keyPEM, err := CreatePrivateKey()
 
 	servCertTmpl, err := CertTemplate()
@@ -111,7 +111,12 @@ func GenerateServerCertAndKey(caCertData *CertData, ipAddress string) (*CertData
 
 	servCertTmpl.KeyUsage = x509.KeyUsageDigitalSignature
 	servCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
-	servCertTmpl.IPAddresses = []net.IP{net.ParseIP(ipAddress)}
+
+	if ip := net.ParseIP(address); ip != nil {
+		servCertTmpl.IPAddresses = append(servCertTmpl.IPAddresses, ip)
+	} else {
+		servCertTmpl.DNSNames = append(servCertTmpl.DNSNames, address)
+	}
 
 	// create a certificate which wraps the server's public key, sign it with the root private key
 	cert, certPEM, err := CreateCert(servCertTmpl, caCertData.Cert, &key.PublicKey, caCertData.PrivateKey)
@@ -122,7 +127,7 @@ func GenerateServerCertAndKey(caCertData *CertData, ipAddress string) (*CertData
 	return &CertData{Cert: cert, CertPEM: certPEM, PrivateKey: key, PrivateKeyPEM: keyPEM}, nil
 }
 
-func GenerateClientCertAndKey(caCertData *CertData, ipAddress string) (*CertData, error) {
+func GenerateClientCertAndKey(caCertData *CertData) (*CertData, error) {
 	key, keyPEM, err := CreatePrivateKey()
 
 	if err != nil {
@@ -146,4 +151,36 @@ func GenerateClientCertAndKey(caCertData *CertData, ipAddress string) (*CertData
 	}
 
 	return &CertData{Cert: cert, CertPEM: certPEM, PrivateKey: key, PrivateKeyPEM: keyPEM}, nil
+}
+
+func ParsePrivateKeyFromPEM(keyPEM []byte) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode(keyPEM)
+
+	if block == nil || block.Type != "RSA PRIVATE KEY" {
+		log.Fatal("failed to decode PEM block containing private key")
+	}
+
+	keyDER, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return keyDER, nil
+}
+
+func ParseCertFromPEM(keyPEM []byte) (*x509.Certificate, error) {
+	block, _ := pem.Decode(keyPEM)
+
+	if block == nil || block.Type != "CERTIFICATE" {
+		log.Fatal("failed to decode PEM block containing certificate")
+	}
+
+	certDER, err := x509.ParseCertificate(block.Bytes)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return certDER, nil
 }

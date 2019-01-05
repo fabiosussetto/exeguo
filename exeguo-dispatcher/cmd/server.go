@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var config = &s.Config{}
+var config = &s.ServerConfig{}
 
 func init() {
 	ServerCmd.PersistentFlags().StringVarP(&config.ServerAddress, "host", "H", "localhost:8080", "address:port to listen on (defaults to localhost:8080)")

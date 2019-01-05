@@ -1,13 +1,72 @@
 package server
 
 import (
+	"errors"
+	"log"
 	"time"
+
+	"github.com/fabiosussetto/exeguo/security"
+	"github.com/jinzhu/gorm"
 )
 
+type Config struct {
+	Key   string `gorm:"primary_key"`
+	Value string
+}
+
 type TargetHost struct {
-	ID      uint   `json:"id"`
-	Name    string `json:"name"`
-	Address string `json:"address" binding:"required"`
+	ID         uint   `json:"id"`
+	Name       string `json:"name"`
+	Address    string `json:"address" binding:"required"`
+	Cert       string `json:"cert"`
+	PrivateKey string `json:"privateKey"`
+}
+
+func (h *TargetHost) AfterCreate(tx *gorm.DB) (err error) {
+	var (
+		tlsCaKey  Config
+		tlsCaCert Config
+	)
+
+	db := tx
+
+	if db.Where(&Config{Key: "tls.ca_key"}).First(&tlsCaKey).RecordNotFound() {
+		return errors.New("can't save invalid data")
+	}
+
+	if db.Where(&Config{Key: "tls.ca_cert"}).First(&tlsCaCert).RecordNotFound() {
+		return errors.New("can't save invalid data")
+	}
+
+	caKeyDER, err := security.ParsePrivateKeyFromPEM([]byte(tlsCaKey.Value))
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	caCertDER, err := security.ParseCertFromPEM([]byte(tlsCaCert.Value))
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	caCertData := &security.CertData{
+		PrivateKey: caKeyDER,
+		Cert:       caCertDER,
+	}
+
+	agentCertData, err := security.GenerateServerCertAndKey(caCertData, h.Address)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	h.Cert = string(agentCertData.CertPEM)
+	h.PrivateKey = string(agentCertData.PrivateKeyPEM)
+
+	db.Save(h)
+
+	return
 }
 
 type ExecutionPlan struct {

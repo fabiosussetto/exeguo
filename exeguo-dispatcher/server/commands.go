@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io"
-	"io/ioutil"
 	"log"
 	"sync"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/jinzhu/gorm"
 
 	pb "github.com/fabiosussetto/exeguo/exeguo-dispatcher/rpc"
+	"github.com/fabiosussetto/exeguo/security"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -23,6 +23,29 @@ func RunExecutionPlan(db *gorm.DB, execPlanRun *ExecutionPlanRun) {
 	execPlan := execPlanRun.ExecutionPlan
 
 	log.Printf("Starting execution plan: %d", execPlan.ID)
+
+	var (
+		caCertConfig         Config
+		caKeyConfig          Config
+		dispatcherCertConfig Config
+		dispatcherKeyConfig  Config
+	)
+
+	if db.Where(&Config{Key: "tls.ca_cert"}).First(&caCertConfig).RecordNotFound() {
+		log.Fatalln("Cannot load CA cert from DB config")
+	}
+
+	if db.Where(&Config{Key: "tls.ca_key"}).First(&caKeyConfig).RecordNotFound() {
+		log.Fatalln("Cannot load CA key from DB config")
+	}
+
+	if db.Where(&Config{Key: "tls.dispatcher_cert"}).First(&dispatcherCertConfig).RecordNotFound() {
+		log.Fatalln("Cannot load CA cert from DB config")
+	}
+
+	if db.Where(&Config{Key: "tls.dispatcher_key"}).First(&dispatcherKeyConfig).RecordNotFound() {
+		log.Fatalln("Cannot load CA key from DB config")
+	}
 
 	wg.Add(len(execPlan.PlanHosts))
 
@@ -37,32 +60,28 @@ func RunExecutionPlan(db *gorm.DB, execPlanRun *ExecutionPlanRun) {
 				ExecutionPlanHostID: planHost.TargetHostID,
 			})
 
-			log.Printf("Connecting to client: %v", planHost)
-
-			// Load the client certificates from disk
-			certificate, err := tls.LoadX509KeyPair("../certs/client_cert.pem", "../certs/client_key.pem")
-			if err != nil {
-				log.Printf("could not load client key pair: %s\n", err)
-				return
-			}
+			log.Printf("Connecting to client: %s (%s)", planHost.TargetHost.Name, planHost.TargetHost.Address)
 
 			// Create a certificate pool from the certificate authority
 			certPool := x509.NewCertPool()
-			ca, err := ioutil.ReadFile("../certs/ca_cert.pem")
+
+			caCert, err := security.ParseCertFromPEM([]byte(caCertConfig.Value))
+
+			dispatcherCert, err := tls.X509KeyPair([]byte(dispatcherCertConfig.Value), []byte(dispatcherKeyConfig.Value))
+
+			// caCert, err := tls.X509KeyPair([]byte(caCertConfig.Value), []byte(caKeyConfig.Value))
+
 			if err != nil {
 				log.Printf("could not read ca certificate: %s", err)
 				return
 			}
 
 			// Append the certificates from the CA
-			if ok := certPool.AppendCertsFromPEM(ca); !ok {
-				log.Printf("failed to append ca certs: %s", err)
-				return
-			}
+			certPool.AddCert(caCert)
 
 			creds := credentials.NewTLS(&tls.Config{
-				ServerName:   "127.0.0.1",
-				Certificates: []tls.Certificate{certificate},
+				ServerName:   planHost.TargetHost.Address, // TODO: decide if ip or hostname
+				Certificates: []tls.Certificate{dispatcherCert},
 				RootCAs:      certPool,
 			})
 
