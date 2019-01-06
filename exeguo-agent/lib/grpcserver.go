@@ -18,7 +18,11 @@ func (s *JobServiceServer) Heartbeat(ctx context.Context, pingMsg *pb.HeartbeatP
 }
 
 func (s *JobServiceServer) ScheduleCommand(command *pb.JobCommand, stream pb.JobService_ScheduleCommandServer) error {
-	job := s.WorkerPool.RunCmd(JobCmd{Name: command.Name, Args: regexp.MustCompile("\\s+").Split(command.Args, -1)})
+	job := s.WorkerPool.RunCmd(JobCmd{
+		JobId: command.JobId,
+		Name:  command.Name,
+		Args:  regexp.MustCompile("\\s+").Split(command.Args, -1),
+	})
 
 	for jobStatus := range job.StdoutChan {
 		statusUpdate := &pb.JobStatusUpdate{
@@ -41,4 +45,9 @@ func (s *JobServiceServer) ScheduleCommand(command *pb.JobCommand, stream pb.Job
 	}
 
 	return nil
+}
+
+func (s *JobServiceServer) StopCommand(ctx context.Context, req *pb.StopCommandRequest) (*pb.JobStatusUpdate, error) {
+	s.WorkerPool.StopJob(req.JobId)
+	return &pb.JobStatusUpdate{}, nil
 }

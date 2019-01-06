@@ -202,3 +202,31 @@ func (e *Env) HostStatusEndpoint(c *gin.Context) {
 
 	c.JSON(http.StatusOK, &HostStatusResponse{Connected: true})
 }
+
+type StopPlanRequest struct {
+	ExecutionPlanRunId uint `json:"executionPlanRunId" binding:"required"`
+}
+
+type StopPlanResponse struct {
+	OK bool
+}
+
+func (e *Env) CreateStopPlanRequest(c *gin.Context) {
+	var (
+		stopReq     StopPlanRequest
+		execPlanRun ExecutionPlanRun
+	)
+
+	if err := c.ShouldBindJSON(&stopReq); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if e.db.Preload("RunStatuses.ExecutionPlanHost.TargetHost").First(&execPlanRun, stopReq.ExecutionPlanRunId).RecordNotFound() {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+		return
+	}
+
+	StopExecutionPlan(e.db, &execPlanRun)
+	c.JSON(http.StatusOK, &StopPlanResponse{OK: true})
+}

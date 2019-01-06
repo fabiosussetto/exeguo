@@ -5,20 +5,20 @@ import (
 )
 
 type Job struct {
-	ID        uint64
-	CmdStatus cmd.Status
-
-	StdoutChan chan *cmd.Status
-
-	worker *Worker
-	cmd    *cmd.Cmd
+	ID            uint64
+	CmdStatus     cmd.Status
+	StdoutChan    chan *cmd.Status
+	InterruptChan chan struct{}
+	worker        *Worker
+	cmd           *cmd.Cmd
 }
 
 func NewJob(ID uint64, command *cmd.Cmd) *Job {
 	return &Job{
-		ID:         ID,
-		StdoutChan: make(chan *cmd.Status),
-		cmd:        command,
+		ID:            ID,
+		StdoutChan:    make(chan *cmd.Status),
+		InterruptChan: make(chan struct{}),
+		cmd:           command,
 		CmdStatus: cmd.Status{
 			Cmd:      "",
 			PID:      0,
@@ -28,4 +28,8 @@ func NewJob(ID uint64, command *cmd.Cmd) *Job {
 			Runtime:  0,
 		},
 	}
+}
+
+func (j *Job) Stop() {
+	j.InterruptChan <- struct{}{}
 }

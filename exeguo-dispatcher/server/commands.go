@@ -102,7 +102,7 @@ func RunExecutionPlan(db *gorm.DB, execPlanRun *ExecutionPlanRun) {
 
 			defer conn.Close()
 
-			jobCmd := &pb.JobCommand{Name: execPlan.CmdName, Args: execPlan.Args}
+			jobCmd := &pb.JobCommand{JobId: uint64(execPlanRun.ID), Name: execPlan.CmdName, Args: execPlan.Args}
 			stream, err := rpcClient.ScheduleCommand(context.Background(), jobCmd)
 
 			if err != nil {
@@ -146,6 +146,48 @@ func RunExecutionPlan(db *gorm.DB, execPlanRun *ExecutionPlanRun) {
 				db.Model(&runStatus).Updates(runStatus)
 			}
 		}(planHost)
+	}
+	wg.Wait()
+}
+
+func StopExecutionPlan(db *gorm.DB, execPlanRun *ExecutionPlanRun) {
+	var wg sync.WaitGroup
+
+	execPlan := execPlanRun.ExecutionPlan
+
+	log.Printf("Stopping execution plan: %d", execPlan.ID)
+
+	wg.Add(len(execPlanRun.RunStatuses))
+
+	for _, runStatus := range execPlanRun.RunStatuses {
+		go func(runStatus RunStatus) {
+			defer wg.Done()
+
+			planHost := runStatus.ExecutionPlanHost
+			targetHost := planHost.TargetHost
+
+			log.Printf("Connecting to client: %s (%s)", targetHost.Name, targetHost.Address)
+
+			rpcClient, conn, err := CreateHostGrpcClient(db, &targetHost)
+
+			if err != nil {
+				log.Printf("fail to create rpc client: %v", err)
+				return
+			}
+
+			defer conn.Close()
+
+			hostDeadline := time.Now().Add(time.Duration(15) * time.Second)
+			ctx, _ := context.WithDeadline(context.Background(), hostDeadline)
+
+			_, err = rpcClient.StopCommand(ctx, &pb.StopCommandRequest{JobId: uint64(execPlanRun.ID)})
+
+			if err != nil {
+				log.Printf("fail to call StopCommand: %v", err)
+				return
+			}
+
+		}(runStatus)
 	}
 	wg.Wait()
 }

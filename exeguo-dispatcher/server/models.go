@@ -22,13 +22,11 @@ type TargetHost struct {
 	PrivateKey string `json:"-"`
 }
 
-func (h *TargetHost) AfterCreate(tx *gorm.DB) (err error) {
+func (h *TargetHost) AfterCreate(db *gorm.DB) (err error) {
 	var (
 		tlsCaKey  Config
 		tlsCaCert Config
 	)
-
-	db := tx
 
 	if db.Where(&Config{Key: "tls.ca_key"}).First(&tlsCaKey).RecordNotFound() {
 		return errors.New("can't save invalid data")

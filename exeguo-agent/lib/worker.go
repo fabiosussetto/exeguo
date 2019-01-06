@@ -76,6 +76,16 @@ func (w *Worker) process(job *Job) {
 		job.cmd.Stop()
 		ticker.Stop()
 		close(job.StdoutChan)
+	case <-job.InterruptChan:
+		w.logger.Infof("Requested to stop job #%d", job.ID)
+		ticker.Stop()
+		job.cmd.Stop()
+		status := job.cmd.Status()
+		go func() {
+			defer close(job.StdoutChan)
+			job.StdoutChan <- &status
+		}()
+		// close(job.StdoutChan)
 	case finalStatus := <-statusChan:
 		ticker.Stop()
 		job.CmdStatus = finalStatus

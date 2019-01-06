@@ -87,6 +87,11 @@ func StartServer(config ServerConfig) {
 			execPlanRunRoute.GET("/:id", env.ExecutionPlanRunDetailEndpoint)
 		}
 
+		stopPlanReqRoute := v1.Group("/stop-plan-requests")
+		{
+			stopPlanReqRoute.POST("/", env.CreateStopPlanRequest)
+		}
+
 	}
 
 	router.Run(config.ServerAddress)

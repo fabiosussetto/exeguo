@@ -5,6 +5,7 @@ package rpc;
 // Interface exported by the server.
 service JobService {
   rpc ScheduleCommand(JobCommand) returns (stream JobStatusUpdate) {}
+  rpc StopCommand(StopCommandRequest) returns (JobStatusUpdate) {}
   rpc Heartbeat(HeartbeatPing) returns (HeartbeatPong) {}
 }
 
@@ -12,8 +13,12 @@ service JobService {
 message JobCommand {
   string name = 1;
   string args = 2;
+  uint64 job_id = 3;
 }
 
+message StopCommandRequest {
+  uint64 job_id = 1;
+}
 
 message JobStatusUpdate {
   string cmd = 1;

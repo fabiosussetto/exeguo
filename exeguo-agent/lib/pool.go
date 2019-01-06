@@ -22,33 +22,52 @@ type WorkerPool struct {
 	cancelChan      chan struct{}
 	forceCancelChan chan struct{}
 	workersWg       sync.WaitGroup
+
+	jobs map[uint64]*Job
 }
 
 type JobCmd struct {
-	Name string
-	Args []string
-	Env  []string
-	Dir  string
+	JobId uint64
+	Name  string
+	Args  []string
+	Env   []string
+	Dir   string
 }
 
 func NewWorkerPool(numWorkers int) *WorkerPool {
 	return &WorkerPool{
 		NumWorkers: numWorkers,
+		jobs:       make(map[uint64]*Job),
 	}
 }
 
 func (pool *WorkerPool) RunCmd(jobCmd JobCmd) *Job {
-	atomic.AddUint64(&pool.jobCounter, 1)
-
 	cmd := cmd.NewCmd("bash", "-c", fmt.Sprintf("%s %s", jobCmd.Name, strings.Join(jobCmd.Args, " ")))
 
-	job := NewJob(atomic.LoadUint64(&pool.jobCounter), cmd)
+	job := NewJob(jobCmd.JobId, cmd)
+
+	pool.jobs[job.ID] = job
 
 	go func() {
 		pool.jobChan <- job
 	}()
 
 	return job
+}
+
+func (pool *WorkerPool) GetJob(JobID uint64) (*Job, bool) {
+	job, ok := pool.jobs[JobID]
+	return job, ok
+}
+
+func (pool *WorkerPool) StopJob(JobID uint64) bool {
+	job, found := pool.GetJob(JobID)
+	if !found {
+		log.Warnf("Cannot find Job to stop with id %d", JobID)
+		return false
+	}
+	job.Stop()
+	return true
 }
 
 func (pool *WorkerPool) Start() (<-chan struct{}, <-chan struct{}) {
