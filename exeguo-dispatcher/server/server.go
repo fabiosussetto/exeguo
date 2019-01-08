@@ -8,6 +8,7 @@ import (
 	adapter "github.com/gwatts/gin-adapter"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"github.com/volatiletech/authboss"
 )
 
 type ServerConfig struct {
@@ -24,7 +25,7 @@ func setupDB(config ServerConfig) *gorm.DB {
 	db.Exec("PRAGMA foreign_keys = ON;")
 	db.LogMode(true)
 
-	db.AutoMigrate(&Config{}, &TargetHost{}, &ExecutionPlan{}, &ExecutionPlanHost{}, &ExecutionPlanRun{}, &RunStatus{})
+	db.AutoMigrate(&Config{}, &TargetHost{}, &ExecutionPlan{}, &ExecutionPlanHost{}, &ExecutionPlanRun{}, &RunStatus{}, &User{})
 
 	var (
 		tlsCaKey          Config
@@ -59,7 +60,7 @@ func StartServer(config ServerConfig) {
 	db := setupDB(config)
 	defer db.Close()
 
-	ab := SetupAuth()
+	ab := SetupAuth(db)
 
 	router := gin.Default()
 	router.Use(adapter.Wrap(ab.LoadClientStateMiddleware))
@@ -68,6 +69,8 @@ func StartServer(config ServerConfig) {
 
 	v1 := router.Group("/v1")
 	{
+		v1.Use(adapter.Wrap(authboss.Middleware(ab, true, false, false)))
+
 		hostsRoute := v1.Group("/hosts")
 		{
 			hostsRoute.GET("/", env.HostListEndpoint)

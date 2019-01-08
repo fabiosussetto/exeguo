@@ -6,7 +6,7 @@ import (
 
 // User struct for authboss
 type User struct {
-	ID int
+	ID uint
 
 	// Non-authboss related field
 	Name string

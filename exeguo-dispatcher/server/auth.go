@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/jinzhu/gorm"
 
 	// "github.com/volatiletech/authboss"
 	"context"
@@ -14,124 +15,121 @@ import (
 	_ "github.com/volatiletech/authboss/register"
 )
 
-// MemStorer stores users in memory
-type MemStorer struct {
-	Users  map[string]User
-	Tokens map[string][]string
+type AuthStorer struct {
+	DB *gorm.DB
 }
 
-// NewMemStorer constructor
-func NewMemStorer() *MemStorer {
-	return &MemStorer{
-		Users: map[string]User{
-			"rick@councilofricks.com": User{
-				ID:        1,
-				Name:      "Rick",
-				Password:  "$2a$10$XtW/BrS5HeYIuOCXYe8DFuInetDMdaarMUJEOg/VA/JAIDgw3l4aG", // pass = 1234
-				Email:     "rick@councilofricks.com",
-				Confirmed: true,
-			},
-		},
-		Tokens: make(map[string][]string),
-	}
+func NewAuthStorer(DB *gorm.DB) *AuthStorer {
+	return &AuthStorer{DB: DB}
+	// return &AuthStorer{
+	// 	Users: map[string]User{
+	// 		"rick@councilofricks.com": User{
+	// 			ID:        1,
+	// 			Name:      "Rick",
+	// 			Password:  "$2a$10$XtW/BrS5HeYIuOCXYe8DFuInetDMdaarMUJEOg/VA/JAIDgw3l4aG", // pass = 1234
+	// 			Email:     "rick@councilofricks.com",
+	// 			Confirmed: true,
+	// 		},
+	// 	},
+	// 	Tokens: make(map[string][]string),
+	// }
 }
 
 // Save the user
-func (m MemStorer) Save(ctx context.Context, user authboss.User) error {
+func (a AuthStorer) Save(ctx context.Context, user authboss.User) error {
 	u := user.(*User)
-	m.Users[u.Email] = *u
-
+	a.DB.Save(u)
 	return nil
 }
 
 // Load the user
-func (m MemStorer) Load(ctx context.Context, key string) (user authboss.User, err error) {
-	// Check to see if our key is actually an oauth2 pid
-	u, ok := m.Users[key]
-	if !ok {
+func (a AuthStorer) Load(ctx context.Context, key string) (user authboss.User, err error) {
+	var dbUser User
+
+	if a.DB.Where(&User{Email: key}).First(&dbUser).RecordNotFound() {
 		return nil, authboss.ErrUserNotFound
 	}
 
-	return &u, nil
+	return &dbUser, nil
 }
 
 // New user creation
-func (m MemStorer) New(ctx context.Context) authboss.User {
+func (a AuthStorer) New(ctx context.Context) authboss.User {
 	return &User{}
 }
 
 // Create the user
-func (m MemStorer) Create(ctx context.Context, user authboss.User) error {
+func (a AuthStorer) Create(ctx context.Context, user authboss.User) error {
+	var existingUser User
 	u := user.(*User)
 
-	if _, ok := m.Users[u.Email]; ok {
+	if !a.DB.Where(&User{Email: u.Email}).First(&existingUser).RecordNotFound() {
 		return authboss.ErrUserFound
 	}
 
-	m.Users[u.Email] = *u
+	a.DB.Create(u)
 	return nil
 }
 
 // LoadByConfirmSelector looks a user up by confirmation token
-func (m MemStorer) LoadByConfirmSelector(ctx context.Context, selector string) (user authboss.ConfirmableUser, err error) {
-	for _, v := range m.Users {
-		if v.ConfirmSelector == selector {
-			return &v, nil
-		}
-	}
+// func (m MemStorer) LoadByConfirmSelector(ctx context.Context, selector string) (user authboss.ConfirmableUser, err error) {
+// 	for _, v := range m.Users {
+// 		if v.ConfirmSelector == selector {
+// 			return &v, nil
+// 		}
+// 	}
 
-	return nil, authboss.ErrUserNotFound
-}
+// 	return nil, authboss.ErrUserNotFound
+// }
 
-// LoadByRecoverSelector looks a user up by confirmation selector
-func (m MemStorer) LoadByRecoverSelector(ctx context.Context, selector string) (user authboss.RecoverableUser, err error) {
-	for _, v := range m.Users {
-		if v.RecoverSelector == selector {
-			return &v, nil
-		}
-	}
+// // LoadByRecoverSelector looks a user up by confirmation selector
+// func (m MemStorer) LoadByRecoverSelector(ctx context.Context, selector string) (user authboss.RecoverableUser, err error) {
+// 	for _, v := range m.Users {
+// 		if v.RecoverSelector == selector {
+// 			return &v, nil
+// 		}
+// 	}
 
-	return nil, authboss.ErrUserNotFound
-}
+// 	return nil, authboss.ErrUserNotFound
+// }
 
-// AddRememberToken to a user
-func (m MemStorer) AddRememberToken(ctx context.Context, pid, token string) error {
-	m.Tokens[pid] = append(m.Tokens[pid], token)
-	return nil
-}
+// // AddRememberToken to a user
+// func (m MemStorer) AddRememberToken(ctx context.Context, pid, token string) error {
+// 	m.Tokens[pid] = append(m.Tokens[pid], token)
+// 	return nil
+// }
 
-// DelRememberTokens removes all tokens for the given pid
-func (m MemStorer) DelRememberTokens(ctx context.Context, pid string) error {
-	delete(m.Tokens, pid)
-	return nil
-}
+// // DelRememberTokens removes all tokens for the given pid
+// func (m MemStorer) DelRememberTokens(ctx context.Context, pid string) error {
+// 	delete(m.Tokens, pid)
+// 	return nil
+// }
 
-// UseRememberToken finds the pid-token pair and deletes it.
-// If the token could not be found return ErrTokenNotFound
-func (m MemStorer) UseRememberToken(ctx context.Context, pid, token string) error {
-	tokens, ok := m.Tokens[pid]
-	if !ok {
-		return authboss.ErrTokenNotFound
-	}
+// // UseRememberToken finds the pid-token pair and deletes it.
+// // If the token could not be found return ErrTokenNotFound
+// func (m MemStorer) UseRememberToken(ctx context.Context, pid, token string) error {
+// 	tokens, ok := m.Tokens[pid]
+// 	if !ok {
+// 		return authboss.ErrTokenNotFound
+// 	}
 
-	for i, tok := range tokens {
-		if tok == token {
-			tokens[len(tokens)-1] = tokens[i]
-			m.Tokens[pid] = tokens[:len(tokens)-1]
-			return nil
-		}
-	}
+// 	for i, tok := range tokens {
+// 		if tok == token {
+// 			tokens[len(tokens)-1] = tokens[i]
+// 			m.Tokens[pid] = tokens[:len(tokens)-1]
+// 			return nil
+// 		}
+// 	}
 
-	return authboss.ErrTokenNotFound
-}
+// 	return authboss.ErrTokenNotFound
+// }
 
 var (
-	database     = NewMemStorer()
 	sessionStore abclientstate.SessionStorer
 	cookieStore  abclientstate.CookieStorer
 )
 
-func SetupAuth() *authboss.Authboss {
+func SetupAuth(DB *gorm.DB) *authboss.Authboss {
 	ab := authboss.New()
 
 	cookieStoreKey, _ := base64.StdEncoding.DecodeString(`NpEPi8pEjKVjLGJ6kYCS+VTCzi6BUuDzU0wrwXyf5uDPArtlofn2AG6aTMiPmN3C909rsEWMNqJqhIVPGP3Exg==`)
@@ -144,7 +142,7 @@ func SetupAuth() *authboss.Authboss {
 	cstore.Options.HttpOnly = false
 	cstore.Options.Secure = false
 
-	ab.Config.Storage.Server = database
+	ab.Config.Storage.Server = NewAuthStorer(DB)
 	ab.Config.Storage.SessionState = sessionStore
 	ab.Config.Storage.CookieState = cookieStore
 
