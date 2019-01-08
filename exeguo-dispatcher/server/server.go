@@ -1,8 +1,11 @@
 package server
 
 import (
+	"net/http"
+
 	"github.com/fabiosussetto/exeguo/security"
 	"github.com/gin-gonic/gin"
+	adapter "github.com/gwatts/gin-adapter"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
@@ -56,9 +59,12 @@ func StartServer(config ServerConfig) {
 	db := setupDB(config)
 	defer db.Close()
 
-	router := gin.Default()
+	ab := SetupAuth()
 
-	env := &Env{db: db}
+	router := gin.Default()
+	router.Use(adapter.Wrap(ab.LoadClientStateMiddleware))
+
+	env := &Env{db: db, Auth: ab}
 
 	v1 := router.Group("/v1")
 	{
@@ -93,6 +99,9 @@ func StartServer(config ServerConfig) {
 		}
 
 	}
+	router.GET("/user", env.UserDetail)
+
+	router.Any("/auth/*w", gin.WrapH(ab.LoadClientStateMiddleware(http.StripPrefix("/auth", ab.Config.Core.Router))))
 
 	router.Run(config.ServerAddress)
 }

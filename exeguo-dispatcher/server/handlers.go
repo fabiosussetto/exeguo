@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/volatiletech/authboss"
+
 	"github.com/jinzhu/gorm"
 
 	pb "github.com/fabiosussetto/exeguo/exeguo-dispatcher/rpc"
@@ -14,6 +16,7 @@ import (
 
 type Env struct {
 	db        *gorm.DB
+	Auth      *authboss.Authboss
 	rpcClient pb.JobServiceClient
 }
 
@@ -229,4 +232,15 @@ func (e *Env) CreateStopPlanRequest(c *gin.Context) {
 
 	StopExecutionPlan(e.db, &execPlanRun)
 	c.JSON(http.StatusOK, &StopPlanResponse{OK: true})
+}
+
+func (e *Env) UserDetail(c *gin.Context) {
+	user, err := e.Auth.CurrentUser(c.Request)
+
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+
+	c.JSON(http.StatusOK, user)
+
 }

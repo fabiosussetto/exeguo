@@ -63,3 +63,19 @@ required = [
 [[constraint]]
   name = "github.com/jinzhu/gorm"
   version = "1.9.2"
+
+[[constraint]]
+  name = "github.com/volatiletech/authboss"
+  version = "2.2.0"
+
+[[constraint]]
+  name = "github.com/volatiletech/authboss-clientstate"
+  revision = "4282b41dcf944fea48aff28e9e6f5a8557512ca7"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/gwatts/gin-adapter"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/turtlemonvh/gin-wraphh"
