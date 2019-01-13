@@ -1,12 +1,19 @@
 package security
 
 import (
+	"bufio"
+	"bytes"
+	"crypto"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"math/big"
 	"net"
@@ -18,6 +25,11 @@ type CertData struct {
 	CertPEM       []byte
 	PrivateKey    *rsa.PrivateKey
 	PrivateKeyPEM []byte
+}
+
+type AgentAuth struct {
+	KeyPair *tls.Certificate
+	CACert  *x509.Certificate
 }
 
 func CertTemplate() (*x509.Certificate, error) {
@@ -183,4 +195,140 @@ func ParseCertFromPEM(keyPEM []byte) (*x509.Certificate, error) {
 	}
 
 	return certDER, nil
+}
+
+func GenerateAgentPEM(caCert *x509.Certificate, caKey *rsa.PrivateKey, address string) ([]byte, error) {
+	keyPair, err := rsa.GenerateKey(rand.Reader, 2048)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var output bytes.Buffer
+	writer := bufio.NewWriter(&output)
+
+	certTmpl, err := CertTemplate()
+
+	if err != nil {
+		return nil, err
+	}
+
+	certTmpl.KeyUsage = x509.KeyUsageDigitalSignature
+	certTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+
+	if ip := net.ParseIP(address); ip != nil {
+		certTmpl.IPAddresses = append(certTmpl.IPAddresses, ip)
+	} else {
+		certTmpl.DNSNames = append(certTmpl.DNSNames, address)
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, certTmpl, caCert, &keyPair.PublicKey, caKey)
+
+	if err != nil {
+		return nil, err
+	}
+
+	pem.Encode(writer, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: caCert.Raw,
+	})
+
+	pem.Encode(writer, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certDER,
+	})
+
+	pem.Encode(writer, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(keyPair),
+	})
+
+	writer.Flush()
+
+	return output.Bytes(), nil
+}
+
+func ParseAgentPEM(pemBytes []byte) (*AgentAuth, error) {
+	var block *pem.Block
+	block, pemBytes = pem.Decode(pemBytes)
+
+	result := &AgentAuth{
+		CACert:  &x509.Certificate{},
+		KeyPair: &tls.Certificate{},
+	}
+
+	for ; block != nil; block, pemBytes = pem.Decode(pemBytes) {
+		if block.Type == "CERTIFICATE" {
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return nil, err
+			}
+
+			if cert.IsCA {
+				result.CACert = cert
+			} else {
+				result.KeyPair.Certificate = [][]byte{cert.Raw}
+			}
+		} else if block.Type == "RSA PRIVATE KEY" {
+			rsaPrivKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("could not parse DER encoded key: %v", err)
+			}
+			result.KeyPair.PrivateKey = rsaPrivKey
+		} else {
+			return nil, fmt.Errorf("invalid pem block type: %s", block.Type)
+		}
+	}
+
+	return result, nil
+}
+
+func LoadCertficateAndKeyFromFile(path string) (*tls.Certificate, error) {
+	raw, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var cert tls.Certificate
+	for {
+		block, rest := pem.Decode(raw)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			cert.Certificate = append(cert.Certificate, block.Bytes)
+		} else {
+			cert.PrivateKey, err = parsePrivateKey(block.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("Failure reading private key from \"%s\": %s", path, err)
+			}
+		}
+		raw = rest
+	}
+
+	if len(cert.Certificate) == 0 {
+		return nil, fmt.Errorf("No certificate found in \"%s\"", path)
+	} else if cert.PrivateKey == nil {
+		return nil, fmt.Errorf("No private key found in \"%s\"", path)
+	}
+
+	return &cert, nil
+}
+
+func parsePrivateKey(der []byte) (crypto.PrivateKey, error) {
+	if key, err := x509.ParsePKCS1PrivateKey(der); err == nil {
+		return key, nil
+	}
+	if key, err := x509.ParsePKCS8PrivateKey(der); err == nil {
+		switch key := key.(type) {
+		case *rsa.PrivateKey, *ecdsa.PrivateKey:
+			return key, nil
+		default:
+			return nil, fmt.Errorf("Found unknown private key type in PKCS#8 wrapping")
+		}
+	}
+	if key, err := x509.ParseECPrivateKey(der); err == nil {
+		return key, nil
+	}
+	return nil, fmt.Errorf("Failed to parse private key")
 }

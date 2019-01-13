@@ -28,6 +28,16 @@ func (e *Env) HostListEndpoint(c *gin.Context) {
 	c.JSON(http.StatusOK, hosts)
 }
 
+func (e *Env) HostDetailEndpoint(c *gin.Context) {
+	var host TargetHost
+
+	if e.db.First(&host, c.Param("id")).RecordNotFound() {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+		return
+	}
+	c.JSON(http.StatusOK, host)
+}
+
 func (e *Env) HostCreateEndpoint(c *gin.Context) {
 	var host TargetHost
 	if err := c.ShouldBindJSON(&host); err != nil {

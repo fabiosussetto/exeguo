@@ -4,11 +4,11 @@ import (
 	"net/http"
 
 	"github.com/fabiosussetto/exeguo/security"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	adapter "github.com/gwatts/gin-adapter"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"github.com/volatiletech/authboss"
 )
 
 type ServerConfig struct {
@@ -63,18 +63,26 @@ func StartServer(config ServerConfig) {
 	ab := SetupAuth(db)
 
 	router := gin.Default()
+
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowOrigins = []string{"http://localhost:3000"}
+	corsConfig.AllowCredentials = true
+	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"}
+
+	router.Use(cors.New(corsConfig))
 	router.Use(adapter.Wrap(ab.LoadClientStateMiddleware))
 
 	env := &Env{db: db, Auth: ab}
 
 	v1 := router.Group("/v1")
 	{
-		v1.Use(adapter.Wrap(authboss.Middleware(ab, true, false, false)))
+		// v1.Use(adapter.Wrap(authboss.Middleware(ab, true, false, false)))
 
 		hostsRoute := v1.Group("/hosts")
 		{
 			hostsRoute.GET("/", env.HostListEndpoint)
 			hostsRoute.POST("/", env.HostCreateEndpoint)
+			hostsRoute.GET("/:id", env.HostDetailEndpoint)
 			hostsRoute.PUT("/:id", env.HostUpdateEndpoint)
 			hostsRoute.DELETE("/:id", env.HostDeleteEndpoint)
 		}
@@ -105,6 +113,8 @@ func StartServer(config ServerConfig) {
 	router.GET("/user", env.UserDetail)
 
 	router.Any("/auth/*w", gin.WrapH(ab.LoadClientStateMiddleware(http.StripPrefix("/auth", ab.Config.Core.Router))))
+
+	router.StaticFS("/ui", Assets)
 
 	router.Run(config.ServerAddress)
 }

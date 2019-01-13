@@ -14,6 +14,7 @@ generate-protobuf:
 
 build-dispatcher: 
 		@echo "Building Dispatcher..."
+		cd exeguo-dispatcher && ${GOPATH}/bin/go-assets-builder --package server -o ./server/webuiassets.go --strip-prefix /web-ui/build web-ui/build/*
 		go build -o ./release/${DISPATCHER_BINARY_NAME} github.com/fabiosussetto/exeguo/exeguo-dispatcher
 
 build-agent:
