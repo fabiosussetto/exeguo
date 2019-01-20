@@ -5,8 +5,9 @@ type HostIDExecutionPlanHost struct {
 }
 
 type HostIDExecutionPlan struct {
+	Name    string `json:"name" binding:"required"`
 	CmdName string `json:"cmdName" binding:"required"`
-	Args    string `json:"args" binding:"required"`
+	Args    string `json:"args"`
 
 	PlanHosts []HostIDExecutionPlanHost `json:"planHosts" binding:"required,dive"`
 }

@@ -20,7 +20,7 @@ type TargetHost struct {
 	Address    string `json:"address" binding:"required"`
 	Cert       string `json:"cert"`
 	PrivateKey string `json:"privateKey"`
-	Pem        string `json:"pem"`
+	Pem        string `json:"-"`
 }
 
 func (h *TargetHost) AfterCreate(db *gorm.DB) (err error) {
@@ -36,8 +36,10 @@ type ExecutionPlan struct {
 	ID        uint      `json:"id"`
 	CreatedAt time.Time `json:"createdAt"`
 
-	CmdName string `json:"cmdName" binding:"required"`
-	Args    string `json:"args" binding:"required"`
+	Name        string `json:"name" binding:"required"`
+	Description string `json:"description"`
+	CmdName     string `json:"cmdName" binding:"required"`
+	Args        string `json:"args"`
 
 	PlanHosts []ExecutionPlanHost `json:"planHosts" binding:"required,dive"`
 }
@@ -61,20 +63,20 @@ type ExecutionPlanRun struct {
 }
 
 type RunStatus struct {
-	ID                  uint `json:"id"`
-	ExecutionPlanRunID  uint `sql:"type:uint REFERENCES execution_plan_runs(id) ON DELETE CASCADE" json:"executionPlanRunId"`
-	ExecutionPlanHostID uint `sql:"type:uint REFERENCES execution_plan_hosts(id) ON DELETE CASCADE" json:"executionPlanHostId"`
-	ExecutionPlanHost   ExecutionPlanHost
+	ID                  uint              `json:"id"`
+	ExecutionPlanRunID  uint              `sql:"type:uint REFERENCES execution_plan_runs(id) ON DELETE CASCADE" json:"executionPlanRunId"`
+	ExecutionPlanHostID uint              `sql:"type:uint REFERENCES execution_plan_hosts(id) ON DELETE CASCADE" json:"executionPlanHostId"`
+	ExecutionPlanHost   ExecutionPlanHost `json:"executionPlanHost"`
 
-	Cmd         string
-	PID         int64
-	Complete    bool
-	Stdout      string
-	Stderr      string
-	StartedAt   *time.Time
-	CompletedAt *time.Time
-	Runtime     float32
-	ExitCode    int64
+	Cmd         string     `json:"cmd"`
+	PID         int64      `json:"pid"`
+	Complete    bool       `json:"complete"`
+	Stdout      string     `json:"stdout"`
+	Stderr      string     `json:"stderr"`
+	StartedAt   *time.Time `json:"startedAt"`
+	CompletedAt *time.Time `json:"completedAt"`
+	Runtime     float32    `json:"runtime"`
+	ExitCode    int64      `json:"exitCode"`
 }
 
 func CreateHostPEM(h *TargetHost, db *gorm.DB) error {

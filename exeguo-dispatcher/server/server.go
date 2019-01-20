@@ -94,8 +94,10 @@ func StartServer(config ServerConfig) {
 
 		commandRunR := v1.Group("/exec-plans")
 		{
+			commandRunR.GET("/", env.ExecutionPlanListEndpoint)
 			commandRunR.POST("/", env.ExecutionPlanCreateEndpoint)
 			commandRunR.GET("/:id", env.ExecutionPlanDetailEndpoint)
+			commandRunR.DELETE("/:id", env.ExecutionPlanDeleteEndpoint)
 		}
 
 		execPlanRunRoute := v1.Group("/exec-plan-runs")

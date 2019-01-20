@@ -24,9 +24,6 @@ var workerPool *hw.WorkerPool
 var bindAddress string
 var tlsCertPath string
 
-// var tlsKeyPath string
-// var tlsCaCertPath string
-
 var rootCmd = &cobra.Command{
 	Use:   "hello",
 	Short: "Hello executes bash commands",
@@ -41,13 +38,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&bindAddress, "host", "H", "localhost:1234", "host:port to listen on")
 
 	rootCmd.PersistentFlags().StringVarP(&tlsCertPath, "tls-cert", "", "", "Path to TLS cert file")
-	// rootCmd.PersistentFlags().StringVarP(&tlsKeyPath, "tls-key", "", "", "Path to TLS key file")
-	// rootCmd.PersistentFlags().StringVarP(&tlsCaCertPath, "tls-ca-cert", "", "", "Path to TLS CA cert file")
 
 	rootCmd.AddCommand(GenCredentialsCmd)
-
 	rootCmd.MarkFlagRequired("tls-cert")
-	// rootCmd.MarkFlagRequired("tls-ca-cert")
 }
 
 func startServer(workerPool *hw.WorkerPool) {
@@ -58,11 +51,6 @@ func startServer(workerPool *hw.WorkerPool) {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	// // Load the certificates from disk
-	// certificate, err := tls.LoadX509KeyPair(tlsCertPath, tlsKeyPath)
-	// if err != nil {
-	// 	log.Fatalf("could not load server key pair: %s", err)
-	// }
 	b, err := ioutil.ReadFile(tlsCertPath)
 	if err != nil {
 		log.Fatalf("Error opening cert file: %s", err)
@@ -76,15 +64,6 @@ func startServer(workerPool *hw.WorkerPool) {
 
 	certPool := x509.NewCertPool()
 	certPool.AddCert(agentAuth.CACert)
-	// ca, err := ioutil.ReadFile(tlsCaCertPath)
-	// if err != nil {
-	// 	log.Fatalf("could not read ca certificate: %s", err)
-	// }
-
-	// Append the client certificates from the CA
-	// if ok := certPool.AppendCertsFromPEM(ca); !ok {
-	// 	log.Fatalf("failed to append client certs: %s", err)
-	// }
 
 	// Create the TLS credentials
 	creds := credentials.NewTLS(&tls.Config{
@@ -99,46 +78,6 @@ func startServer(workerPool *hw.WorkerPool) {
 
 	grpcServer.Serve(lis)
 }
-
-// func startServer(workerPool *hw.WorkerPool) {
-// 	log.Infoln("Starting gRPC server")
-
-// 	lis, err := net.Listen("tcp", bindAddress)
-// 	if err != nil {
-// 		log.Fatalf("failed to listen: %v", err)
-// 	}
-
-// 	// Load the certificates from disk
-// 	certificate, err := tls.LoadX509KeyPair(tlsCertPath, tlsKeyPath)
-// 	if err != nil {
-// 		log.Fatalf("could not load server key pair: %s", err)
-// 	}
-
-// 	// Create a certificate pool from the certificate authority
-// 	certPool := x509.NewCertPool()
-// 	ca, err := ioutil.ReadFile(tlsCaCertPath)
-// 	if err != nil {
-// 		log.Fatalf("could not read ca certificate: %s", err)
-// 	}
-
-// 	// Append the client certificates from the CA
-// 	if ok := certPool.AppendCertsFromPEM(ca); !ok {
-// 		log.Fatalf("failed to append client certs: %s", err)
-// 	}
-
-// 	// Create the TLS credentials
-// 	creds := credentials.NewTLS(&tls.Config{
-// 		ClientAuth:   tls.RequireAndVerifyClientCert,
-// 		Certificates: []tls.Certificate{certificate},
-// 		ClientCAs:    certPool,
-// 	})
-
-// 	grpcServer := grpc.NewServer(grpc.Creds(creds))
-
-// 	pb.RegisterJobServiceServer(grpcServer, &hw.JobServiceServer{WorkerPool: workerPool})
-
-// 	grpcServer.Serve(lis)
-// }
 
 func start() {
 	log.SetFormatter(&log.TextFormatter{

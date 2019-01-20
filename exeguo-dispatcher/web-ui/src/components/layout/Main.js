@@ -1,34 +1,37 @@
-import React from 'react';
-import { withStyles } from '@material-ui/core/styles';
+import React from "react";
+import { withStyles } from "@material-ui/core/styles";
 import { Route, Switch } from "react-router-dom";
 
-import TopBar from './TopBar'
-import SideMenu from './SideMenu'
-import Dashboard from '../Dashboard'
-import Login from '../Login'
-import PasswordReset from '../PasswordReset'
-import HostList from '../HostList'
-import HostDetail from '../HostDetail'
-import HostAdd from '../HostAdd'
+import TopBar from "./TopBar";
+import SideMenu from "./SideMenu";
+import Dashboard from "../Dashboard";
+import Login from "../Login";
+import PasswordReset from "../PasswordReset";
+import HostList from "../HostList";
+import HostDetail from "../HostDetail";
+import HostAdd from "../HostAdd";
+import ExecPlanList from "../executionPlan/List";
+import ExecPlanCreate from "../executionPlan/Create";
+import ExecPlanRunDetail from "../executionPlanRun/Detail";
 
 const drawerWidth = 210;
 
 const styles = theme => ({
   root: {
-    display: 'flex',
+    display: "flex"
   },
   drawer: {
     width: drawerWidth,
-    flexShrink: 0,
+    flexShrink: 0
   },
   drawerPaper: {
-    width: drawerWidth,
+    width: drawerWidth
   },
   content: {
     flexGrow: 1,
-    padding: theme.spacing.unit * 3,
+    padding: theme.spacing.unit * 3
   },
-  toolbar: theme.mixins.toolbar,
+  toolbar: theme.mixins.toolbar
 });
 
 function Main(props) {
@@ -37,34 +40,67 @@ function Main(props) {
   return (
     <div className={classes.root}>
       <Switch>
-        <Route path="/auth" render={({ match }) => (
-          <React.Fragment>
-            <TopBar />
-            <main className={classes.content}>
-              <div className={classes.toolbar} />
-              <Route path={`${match.url}/login`} component={Login} />
-              <Route path={`${match.url}/password-recovery`} component={PasswordReset} />
-            </main>
-          </React.Fragment>
-        )}/>
-        <Route render={props => (
-          <React.Fragment>
-            <TopBar />
-            <SideMenu />
-            <main className={classes.content}>
-              <div className={classes.toolbar} />
-              <Route path="" exact component={Dashboard} />
+        <Route
+          path="/auth"
+          render={({ match }) => (
+            <React.Fragment>
+              <TopBar />
+              <main className={classes.content}>
+                <div className={classes.toolbar} />
+                <Route path={`${match.url}/login`} component={Login} />
+                <Route
+                  path={`${match.url}/password-recovery`}
+                  component={PasswordReset}
+                />
+              </main>
+            </React.Fragment>
+          )}
+        />
+        <Route
+          render={props => (
+            <React.Fragment>
+              <TopBar />
+              <SideMenu />
+              <main className={classes.content}>
+                <div className={classes.toolbar} />
+                <Route path="" exact component={Dashboard} />
 
-              <Route path="/hosts" render={({ match: { url } }) => (
-                <Switch>
-                  <Route exact path={`${url}/`} component={HostList} />
-                  <Route path={`${url}/add`} component={HostAdd} />
-                  <Route path={`${url}/:id`} component={HostDetail} />
-                </Switch>
-              )}/>
-            </main>
-          </React.Fragment>
-        )}/>
+                <Route
+                  path="/hosts"
+                  render={({ match: { url } }) => (
+                    <Switch>
+                      <Route exact path={`${url}/`} component={HostList} />
+                      <Route path={`${url}/add`} component={HostAdd} />
+                      <Route path={`${url}/:id`} component={HostDetail} />
+                    </Switch>
+                  )}
+                />
+
+                <Route
+                  path="/exec-plans"
+                  render={({ match: { url } }) => (
+                    <Switch>
+                      <Route exact path={`${url}/`} component={ExecPlanList} />
+                      <Route path={`${url}/add`} component={ExecPlanCreate} />
+                    </Switch>
+                  )}
+                />
+
+                <Route
+                  path="/exec-plan-runs"
+                  render={({ match: { url } }) => (
+                    <Switch>
+                      <Route
+                        path={`${url}/:id`}
+                        component={ExecPlanRunDetail}
+                      />
+                    </Switch>
+                  )}
+                />
+              </main>
+            </React.Fragment>
+          )}
+        />
       </Switch>
     </div>
   );

@@ -1,41 +1,39 @@
-import React from 'react';
-import { Link } from 'react-router-dom'
-import { withStyles } from '@material-ui/core/styles';
-import Drawer from '@material-ui/core/Drawer';
-import List from '@material-ui/core/List';
-import ListItem from '@material-ui/core/ListItem';
-import ListItemText from '@material-ui/core/ListItemText';
+import React from "react";
+import { Link } from "react-router-dom";
+import { withStyles } from "@material-ui/core/styles";
+import Drawer from "@material-ui/core/Drawer";
+import List from "@material-ui/core/List";
+import ListItem from "@material-ui/core/ListItem";
+import ListItemText from "@material-ui/core/ListItemText";
 
-import DvrOutlined from '@material-ui/icons/DvrOutlined';
-import FlashOnOutlined from '@material-ui/icons/FlashOnOutlined';
-
+import DvrOutlined from "@material-ui/icons/DvrOutlined";
+import FlashOnOutlined from "@material-ui/icons/FlashOnOutlined";
 
 const drawerWidth = 210;
 
 const styles = theme => ({
   drawer: {
     width: drawerWidth,
-    flexShrink: 0,
+    flexShrink: 0
   },
   drawerPaper: {
-    width: drawerWidth,
+    width: drawerWidth
   },
-  toolbar: theme.mixins.toolbar,
+  toolbar: theme.mixins.toolbar
 });
 
 const MENU_ITEMS = [
   {
-    label: 'Hosts',
+    label: "Hosts",
     icon: DvrOutlined,
-    to: '/hosts'
+    to: "/hosts"
   },
   {
-    label: 'Commands',
+    label: "Execution Plans",
     icon: FlashOnOutlined,
-    to: '/commands'
+    to: "/exec-plans"
   }
-]
-
+];
 
 function SideMenu(props) {
   const { classes } = props;
@@ -45,20 +43,20 @@ function SideMenu(props) {
       className={classes.drawer}
       variant="permanent"
       classes={{
-        paper: classes.drawerPaper,
+        paper: classes.drawerPaper
       }}
     >
       <div className={classes.toolbar} />
       <List>
         {MENU_ITEMS.map(item => {
-          const ItemIcon = item.icon
+          const ItemIcon = item.icon;
 
           return (
             <ListItem button key={item.label} component={Link} to={item.to}>
               <ItemIcon />
               <ListItemText primary={item.label} />
             </ListItem>
-          )
+          );
         })}
       </List>
     </Drawer>

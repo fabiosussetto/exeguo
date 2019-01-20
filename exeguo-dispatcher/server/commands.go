@@ -76,7 +76,7 @@ func RunExecutionPlan(db *gorm.DB, execPlanRun *ExecutionPlanRun) {
 
 	execPlan := execPlanRun.ExecutionPlan
 
-	log.Printf("Starting execution plan: %d", execPlan.ID)
+	log.Printf("Starting execution plan: %d - Plan run %d", execPlan.ID, execPlanRun.ID)
 
 	wg.Add(len(execPlan.PlanHosts))
 
@@ -86,10 +86,14 @@ func RunExecutionPlan(db *gorm.DB, execPlanRun *ExecutionPlanRun) {
 
 			runStatus := RunStatus{}
 
-			db.FirstOrCreate(&runStatus, RunStatus{
+			err := db.FirstOrCreate(&runStatus, RunStatus{
 				ExecutionPlanRunID:  execPlanRun.ID,
-				ExecutionPlanHostID: planHost.TargetHostID,
-			})
+				ExecutionPlanHostID: planHost.ID,
+			}).Error
+
+			if err != nil {
+				log.Printf("fail to find/create model: %v - %s | %s", err, execPlanRun.ID, planHost.TargetHostID)
+			}
 
 			log.Printf("Connecting to client: %s (%s)", planHost.TargetHost.Name, planHost.TargetHost.Address)
 
